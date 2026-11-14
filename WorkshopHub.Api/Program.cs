@@ -3,6 +3,10 @@ using Swashbuckle.AspNetCore.SwaggerUI;
 using WorkshopHub.Infrastructure;
 
 var builder = WebApplication.CreateBuilder(args);
+
+// Aspire ServiceDefaults provides a set of opinionated defaults for hosting and configuring the application.
+builder.AddServiceDefaults();
+
 builder.Services.AddControllers();
 builder.Services.AddOpenApi();
 builder.Services.AddProblemDetails();
@@ -29,6 +33,6 @@ if (app.Environment.IsDevelopment())
 
 app.MapControllers();
 app.MapOpenApi();
-app.MapGet("/health", () => Results.Ok(new { status = "Healthy" }));
+app.MapDefaultEndpoints();
 
 app.Run();

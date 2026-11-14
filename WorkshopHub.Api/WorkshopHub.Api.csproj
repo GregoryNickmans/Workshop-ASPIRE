@@ -1,8 +1,9 @@
-<Project Sdk="Microsoft.NET.Sdk.Web">
+﻿<Project Sdk="Microsoft.NET.Sdk.Web">
   <ItemGroup>
     <ProjectReference Include="../WorkshopHub.Application/WorkshopHub.Application.csproj" />
     <ProjectReference Include="../WorkshopHub.Infrastructure/WorkshopHub.Infrastructure.csproj" />
     <ProjectReference Include="../WorkshopHub.Contracts/WorkshopHub.Contracts.csproj" />
+    <ProjectReference Include="..\WorkshopHub.AppHost.ServiceDefaults\WorkshopHub.AppHost.ServiceDefaults.csproj" />
     <PackageReference Include="Microsoft.AspNetCore.OpenApi" />
     <PackageReference Include="Swashbuckle.AspNetCore.SwaggerUI" />
     <PackageReference Include="Microsoft.OpenApi" />
