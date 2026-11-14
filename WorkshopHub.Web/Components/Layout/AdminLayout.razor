@@ -1,0 +1,22 @@
+@inherits LayoutComponentBase
+
+<a class="skip-link" href="#main-content">Skip to content</a>
+<div class="admin-shell">
+    <aside class="admin-sidebar">
+        <a class="brand" href="/"><span class="brand-mark" aria-hidden="true">w.</span>WorkshopHub</a>
+        <p class="eyebrow">Management space</p>
+        <nav aria-label="Admin navigation">
+            <NavLink href="admin/courses"><span aria-hidden="true">▦</span> Courses</NavLink>
+            <NavLink href="admin/bookings"><span aria-hidden="true">≡</span> Bookings</NavLink>
+        </nav>
+        <a class="back-link" href="/courses">← Back to catalog</a>
+    </aside>
+    <div class="admin-content">
+        <div class="demo-banner">Admin portal.</div>
+        <main id="main-content" class="admin-main">@Body</main>
+    </div>
+</div>
+<div id="blazor-error-ui" role="alert">Connection interrupted.
+    <a href="" class="reload">Reload</a> and check persisted state before retrying.
+    <button class="dismiss" aria-label="Dismiss">×</button>
+</div>

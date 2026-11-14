@@ -1,0 +1,182 @@
+@page "/courses/{Id:guid}/book"
+@implements IAsyncDisposable
+@inject BookingApiClient BookingApi
+@inject DisplayFormatting Display
+
+<PageTitle>Book a course · WorkshopHub</PageTitle>
+<a class="back-link" href="/courses">← All courses</a>
+@if (_loading)
+{
+    <div class="loading-state" role="status">
+        <span class="spinner" aria-hidden="true"></span>
+        Loading course…
+    </div>
+}
+else if (_course is null)
+{
+    <section class="empty-state">
+        <h1>Let's find your course</h1>
+        <p role="alert">@(_error ?? "This course is no longer available.")</p>
+        <button class="button secondary" @onclick="LoadAsync">Try again</button>
+    </section>
+}
+else
+{
+    <div class="booking-grid">
+        <section class="booking-summary">
+            <p class="eyebrow">Your next chapter</p>
+            <h1>@_course.Title</h1>
+            <p class="hero-copy">@_course.ShortDescription</p>
+            <div class="summary-details"><span class="price">@Display.Price(_course.Price)</span>
+                <span class="badge @(_course.RemainingSeats == 0 ? "muted" : "available")">@_course.RemainingSeats seats
+                    remaining
+                </span>
+            </div>
+            <p class="caption">One seat per booking. The price is informational: no payment is collected and no email is
+                sent.
+            </p>
+        </section>
+        <section class="panel booking-panel">
+            @if (_receipt is not null)
+            {
+                <div class="receipt" role="status"><span class="receipt-icon" aria-hidden="true">✓</span>
+                    <p class="eyebrow">Your seat is pending</p>
+                    <h2>You're on the list.</h2>
+                    <p>Keep this reference for your booking. Your saved receipt is shown below.</p>
+                    <dl class="receipt-details">
+                        <dt>Reference</dt>
+                        <dd class="reference">@DisplayFormatting.Reference(_receipt.Id)</dd>
+                        <dt>Course</dt>
+                        <dd>@_receipt.Workshop</dd>
+                        <dt>Participant</dt>
+                        <dd>@_receipt.ParticipantName</dd>
+                        <dt>Email</dt>
+                        <dd>@_receipt.ParticipantEmail</dd>
+                        <dt>Price at booking</dt>
+                        <dd>@Display.Price(_receipt.Price ?? 0)</dd>
+                        <dt>Status</dt>
+                        <dd><span class="badge pending">@_receipt.Status</span></dd>
+                        <dt>Created</dt>
+                        <dd>@DisplayFormatting.Timestamp(_receipt.CreatedAt)</dd>
+                    </dl>
+                    <p class="caption">
+                        No confirmation email has been sent. An administrator can confirm or cancel this booking.
+                    </p>
+                    <a class="button" href="/courses">Explore more courses</a>
+                </div>
+            }
+            else
+            {
+                <p class="eyebrow">A little introduction</p>
+                <h2>Book your place</h2>
+                <p>Tell us who is joining. Use demo contact details.</p>
+                @if (_error is not null)
+                {
+                    <div class="notice error" role="alert">@_error</div>
+                }
+                @if (_course.RemainingSeats == 0)
+                {
+                    <div class="notice" role="status">This course is fully booked. Your details
+                        are kept below; refresh availability before trying again.
+                    </div>
+                }
+                <EditForm Model="_form" OnValidSubmit="SubmitAsync" FormName="book-course">
+                    <DataAnnotationsValidator />
+                    <fieldset disabled="@_saving">
+                        <div class="field"><label for="participant-name">Participant name</label>
+                            <InputText id="participant-name" @bind-Value="_form.Name" maxlength="100" autocomplete="name" />
+                            <ValidationMessage For="() => _form.Name" />
+                        </div>
+                        <div class="field"><label for="participant-email">Email address</label>
+                            <InputText id="participant-email" type="email" @bind-Value="_form.Email" maxlength="254"
+                                       autocomplete="email" />
+                            <ValidationMessage For="() => _form.Email" />
+                        </div>
+                        <button class="button full-width" type="submit" disabled="@(_saving || _course.RemainingSeats == 0)">
+                            @(_saving ? "Reserving your seat…" : "Reserve one seat")
+                            <span aria-hidden="true">↗</span>
+                        </button>
+                    </fieldset>
+                </EditForm>
+                <button class="text-link refresh-link" @onclick="RefreshAvailabilityAsync" disabled="@_saving">Refresh
+                    availability
+                </button>
+            }
+        </section>
+    </div>
+}
+
+@code {
+    [Parameter] public Guid Id { get; set; }
+    private readonly CancellationTokenSource _lifetime = new();
+    private CancellationTokenSource? _load;
+    private CourseResponse? _course;
+    private BookingResponse? _receipt;
+    private ParticipantForm _form = new();
+    private Guid _loadedId;
+    private bool _loading;
+    private bool _saving;
+    private string? _error;
+    protected override async Task OnParametersSetAsync()
+    {
+        if (_loadedId != Id) { _form = new(); _receipt = null; _loadedId = Id; }
+        await LoadAsync();
+    }
+    private async Task LoadAsync()
+    {
+        _load?.Cancel();
+        _load?.Dispose();
+        _load = CancellationTokenSource.CreateLinkedTokenSource(_lifetime.Token);
+        var token = _load.Token;
+        var id = Id;
+        _loading = true;
+        _error = null;
+        _course = null;
+        try
+        {
+            var course = await BookingApi.GetCourseAsync(id, token); if (!token.IsCancellationRequested && id == Id)
+            {
+                _course
+= course;
+            }
+        }
+        catch (OperationCanceledException) when (token.IsCancellationRequested) { }
+        catch (BookingApiException error) { if (id == Id) { _error = error.Message; } }
+        catch (Exception) { if (id == Id) { _error = "The course couldn't be loaded. Check API readiness and try again."; } }
+        finally { if (!token.IsCancellationRequested && id == Id) { _loading = false; } }
+    }
+    private async Task RefreshAvailabilityAsync()
+    {
+        var id = Id;
+        try { var course = await BookingApi.GetCourseAsync(id, _lifetime.Token); if (id == Id) { _course = course; } }
+        catch (OperationCanceledException) when (_lifetime.IsCancellationRequested) { }
+        catch (Exception) { if (id == Id) { _error = "Availability couldn't be refreshed. Your details are unchanged; try refreshing again."; } }
+    }
+    private async Task SubmitAsync()
+    {
+        if (_saving || _course is null || _course.RemainingSeats == 0) { return; }
+        _saving = true;
+        _error = null;
+        var id = Id;
+        try
+        {
+            var receipt = await BookingApi.CreateAsync(new CreateBookingRequest(id, _form.Name, _form.Email), _lifetime.Token);
+            if (id == Id) { _receipt = receipt; await RefreshAvailabilityAsync(); }
+        }
+        catch (OperationCanceledException) when (_lifetime.IsCancellationRequested) { }
+        catch (BookingApiException error)
+        {
+            if (id == Id)
+            {
+                _error = error.Message; if (error.StatusCode == System.Net.HttpStatusCode.Conflict)
+                {
+                    await
+RefreshAvailabilityAsync();
+                }
+            }
+        }
+        catch (Exception) { if (id == Id) { _error = "The outcome is uncertain. Ask an administrator to check bookings before submitting again."; } }
+        finally { _saving = false; }
+    }
+    public async ValueTask DisposeAsync() { await _lifetime.CancelAsync(); _load?.Dispose(); _lifetime.Dispose(); }
+}

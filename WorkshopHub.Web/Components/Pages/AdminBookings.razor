@@ -1,0 +1,271 @@
+@page "/admin/bookings"
+@layout WorkshopHub.Web.Components.Layout.AdminLayout
+@implements IAsyncDisposable
+@inject BookingApiClient BookingApi
+@inject DisplayFormatting Display
+
+<PageTitle>Manage bookings · WorkshopHub</PageTitle>
+<div class="page-heading">
+    <div>
+        <p class="eyebrow">People & possibilities</p>
+        <h1>Bookings</h1>
+        <p>Review participants, confirm their places, and keep course availability accurate.</p>
+    </div>
+    <button class="button secondary" @onclick="ReloadAsync" disabled="@_busy">Refresh bookings</button>
+</div>
+@if (_error is not null)
+{
+    <div class="notice error" role="alert">
+        @_error
+        <button class="button secondary small" @onclick="ReloadAsync" disabled="@_busy">
+            Try again
+        </button>
+    </div>
+}
+@if (_success is not null)
+{
+    <div class="notice success" role="status">@_success</div>
+}
+@if (_cancel is not null)
+{
+    <section class="panel confirmation" aria-labelledby="cancel-title">
+        <h2 id="cancel-title">Cancel booking @DisplayFormatting.Reference(_cancel.Id)?</h2>
+        <p>@(_cancel.ParticipantName ?? "Legacy participant") · @_cancel.Workshop</p>
+        <p>
+            This releases one seat for a course-linked booking.
+            The record remains in history and cannot be confirmed again.
+        </p>
+        <div class="actions">
+            <button class="button danger" @onclick="CancelAsync" disabled="@_busy">
+                @(_busy ? "Cancelling…" : "Yes, cancel booking")
+            </button>
+            <button class="button secondary" @onclick="() => _cancel = null" disabled="@_busy">
+                Keep booking
+            </button>
+        </div>
+    </section>
+}
+<form class="panel booking-filters" @onsubmit="ApplyFiltersAsync" @onsubmit:preventDefault>
+    <div class="field">
+        <label for="booking-search">Search participants or references</label>
+        <input id="booking-search" type="search" @bind="_search" placeholder="Name, email or reference"
+               maxlength="200" />
+    </div>
+    <div class="field">
+        <label for="booking-course">Course</label>
+        <select id="booking-course" @bind="_courseFilter">
+            <option value="">All courses (including legacy)</option>
+            @foreach (var course in _courses)
+            {
+                <option value="@course.Id">
+                    @course.Title @(course.IsArchived ? "(archived)" : "")
+                </option>
+            }
+        </select>
+    </div>
+    <div class="field">
+        <label for="booking-status">Status</label>
+        <select id="booking-status" @bind="_status">
+            <option value="">All statuses</option>
+            <option>Pending</option>
+            <option>Confirmed</option>
+            <option>Cancelled</option>
+        </select>
+    </div>
+    <button class="button" type="submit" disabled="@_busy">
+        Apply filters
+    </button>
+</form>
+@if (_loading)
+{
+    <div class="loading-state" role="status"><span class="spinner" aria-hidden="true"></span>Loading
+        booking history…
+    </div>
+}
+else if (_page is not null && _page.TotalCount == 0 && _error is null)
+{
+    <section class="empty-state">
+        <h2>No bookings found</h2>
+        <p>@(HasFilters ? "Try a different search, course, or status." : "New course bookings will appear here as participants reserve seats.")</p>
+        @if (HasFilters)
+        {
+            <button class="button secondary" @onclick="ClearFiltersAsync">
+                Clear filters
+            </button>
+        }
+    </section>
+}
+else if (_page is not null)
+{
+    <div class="section-heading results-heading">
+        <p class="results-summary" role="status">@_page.TotalCount booking@(_page.TotalCount == 1 ? "" : "s") · Page
+            @_page.Page of @PageCount</p>
+            <p class="caption">20 per page · UTC timestamps</p>
+        </div>
+        <ul class="booking-list">
+            @foreach (var booking in _page.Items)
+            {
+                <li class="panel booking-card" @key="booking.Id">
+                    <div class="booking-card-main">
+                        <div class="section-heading">
+                            <div>
+                                <p class="reference">@DisplayFormatting.Reference(booking.Id)</p>
+                                <h2>@booking.Workshop</h2>
+                            </div>
+                            <span class="badge @booking.Status.ToLowerInvariant()">@booking.Status</span>
+                        </div>
+                        <div class="booking-card-details">
+                            <div>
+                                <span class="caption">Participant</span>
+                                <strong>@(booking.ParticipantName ?? "No participant data")</strong>
+                                <span>@(booking.ParticipantEmail ?? "Legacy synthetic booking")</span>
+                            </div>
+                            <div>
+                                <span class="caption">Booked price</span>
+                                <strong>@(booking.Price is null ? "Not recorded" : Display.Price(booking.Price.Value))</strong>
+                                @if (booking.IsLegacy)
+                                {
+                                    <span class="badge muted">Legacy · unlinked</span>
+                                }
+                            </div>
+                            <div><span class="caption">Created</span><span>@DisplayFormatting.Timestamp(booking.CreatedAt)</span>@if
+                                (booking.ConfirmedAt is not null) {
+                                    <span class="caption">
+                                        Confirmed @DisplayFormatting.Timestamp(booking.ConfirmedAt.Value)
+                                    </span>
+                                }
+                                @if (booking.CancelledAt is not null)
+                                {
+                                    <span class="caption">
+                                        Cancelled @DisplayFormatting.Timestamp(booking.CancelledAt.Value)
+                                    </span>
+                                }
+                            </div>
+                        </div>
+                        <details>
+                            <summary>Full booking ID</summary>
+                            <span class="full-reference">@booking.Id</span>
+                        </details>
+                    </div>
+                    <div class="booking-card-actions">
+                        @if (booking.Status == "Pending")
+                        {
+                            <button class="button small" @onclick="() => ConfirmAsync(booking.Id)" disabled="@_busy">
+                                Confirm place
+                            </button>
+                        }
+                        @if (booking.Status != "Cancelled")
+                        {
+                            <button class="button secondary small" @onclick="() => _cancel = booking" disabled="@_busy">
+                                Cancel booking
+                            </button>
+                        }
+                        else
+                        {
+                            <span class="caption">Cancellation preserved in history</span>
+                        }
+                    </div>
+                </li>
+            }
+        </ul>
+        <nav class="pagination" aria-label="Booking pages">
+            <button class="button secondary" @onclick="PreviousAsync" disabled="@(_busy || _page.Page <= 1)">
+                ← Previous
+            </button>
+            <span>Page @_page.Page / @PageCount</span>
+            <button class="button secondary" @onclick="NextAsync" disabled="@(_busy || _page.Page >= PageCount)">
+                Next →
+            </button>
+        </nav>
+    }
+
+@code {
+    [SupplyParameterFromQuery(Name = "courseId")] public Guid? CourseId { get; set; }
+    private readonly CancellationTokenSource _lifetime = new();
+    private CancellationTokenSource? _request;
+    private List<AdminCourseResponse> _courses = [];
+    private PagedResponse<AdminBookingResponse>? _page;
+    private AdminBookingResponse? _cancel;
+    private Guid? _previousCourseId;
+    private bool _initialized;
+    private string _courseFilter = "";
+    private string _search = "";
+    private string _status = "";
+    private int _pageNumber = 1;
+    private bool _loading;
+    private bool _busy;
+    private string? _error;
+    private string? _success;
+    private bool HasFilters => _courseFilter != "" || _status != "" || !string.IsNullOrWhiteSpace(_search);
+    private int PageCount => Math.Max(1, (int)Math.Ceiling((_page?.TotalCount ?? 0) / (double)(_page?.PageSize ?? 20)));
+    protected override async Task OnParametersSetAsync()
+    {
+        if (!_initialized)
+        {
+            _initialized = true;
+            try { _courses = await BookingApi.ListAdminCoursesAsync(_lifetime.Token); }
+            catch (OperationCanceledException) when (_lifetime.IsCancellationRequested) { return; }
+            catch (Exception) { _error = "The course filter couldn't be loaded. Refresh records to try again."; }
+        }
+        if (_previousCourseId != CourseId || _page is null)
+        {
+            _courseFilter = CourseId?.ToString() ?? ""; _previousCourseId =
+CourseId; _pageNumber = 1; await LoadPageAsync();
+        }
+    }
+    private async Task ReloadAsync()
+    {
+        _error = null;
+        try { _courses = await BookingApi.ListAdminCoursesAsync(_lifetime.Token); }
+        catch (OperationCanceledException) when (_lifetime.IsCancellationRequested) { return; }
+        catch (Exception) { _error = "The course filter couldn't be refreshed."; }
+        await LoadPageAsync();
+    }
+    private Task ApplyFiltersAsync()
+    {
+        _pageNumber = 1; _cancel = null; _error = null; _success = null; return
+LoadPageAsync();
+    }
+    private Task ClearFiltersAsync() { _courseFilter = ""; _search = ""; _status = ""; return ApplyFiltersAsync(); }
+    private Task PreviousAsync() { _pageNumber = Math.Max(1, _pageNumber - 1); return LoadPageAsync(); }
+    private Task NextAsync() { _pageNumber = Math.Min(PageCount, _pageNumber + 1); return LoadPageAsync(); }
+    private async Task LoadPageAsync()
+    {
+        _request?.Cancel(); _request?.Dispose();
+        _request = CancellationTokenSource.CreateLinkedTokenSource(_lifetime.Token);
+        var token = _request.Token;
+        _loading = true;
+        try
+        {
+            var course = Guid.TryParse(_courseFilter, out var id) ? id : (Guid?)null;
+            var page = await BookingApi.ListBookingsAsync(course, _status, _search, _pageNumber, token);
+            if (!token.IsCancellationRequested) { _page = page; }
+        }
+        catch (OperationCanceledException) when (token.IsCancellationRequested) { }
+        catch (BookingApiException error) { if (!token.IsCancellationRequested) { _error = error.Message; } }
+        catch (Exception) { if (!token.IsCancellationRequested) { _error = "Bookings couldn't be loaded. Check API readiness and refresh."; } }
+        finally { if (!token.IsCancellationRequested) { _loading = false; } }
+    }
+    private async Task ConfirmAsync(Guid id)
+    {
+        if (_busy) { return; }
+        _busy = true; _error = null; _success = null;
+        try { await BookingApi.ConfirmAsync(id, _lifetime.Token); _success = $"Booking {DisplayFormatting.Reference(id)} confirmed."; await LoadPageAsync(); }
+        catch (OperationCanceledException) when (_lifetime.IsCancellationRequested) { }
+        catch (BookingApiException error) { _error = error.Message; await LoadPageAsync(); }
+        catch (Exception) { _error = "The confirmation outcome is uncertain. Refresh persisted state before retrying."; }
+        finally { _busy = false; }
+    }
+    private async Task CancelAsync()
+    {
+        if (_busy || _cancel is null) { return; }
+        _busy = true; _error = null; _success = null;
+        var id = _cancel.Id;
+        try { await BookingApi.CancelAsync(id, _lifetime.Token); _cancel = null; _success = $"Booking {DisplayFormatting.Reference(id)} cancelled. Course availability has been updated."; await LoadPageAsync(); }
+        catch (OperationCanceledException) when (_lifetime.IsCancellationRequested) { }
+        catch (BookingApiException error) { _error = error.Message; await LoadPageAsync(); }
+        catch (Exception) { _error = "The cancellation outcome is uncertain. Refresh persisted state before retrying."; }
+        finally { _busy = false; }
+    }
+    public async ValueTask DisposeAsync() { await _lifetime.CancelAsync(); _request?.Dispose(); _lifetime.Dispose(); }
+}

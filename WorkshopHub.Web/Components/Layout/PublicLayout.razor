@@ -1,0 +1,21 @@
+@inherits LayoutComponentBase
+
+<a class="skip-link" href="#main-content">Skip to content</a>
+<header class="site-header">
+    <a class="brand" href="/"><span class="brand-mark" aria-hidden="true">w.</span>WorkshopHub</a>
+    <nav aria-label="Main navigation">
+        <NavLink href="courses">Explore courses</NavLink>
+        <NavLink href="admin/courses">Admin portal <span aria-hidden="true">↗</span></NavLink>
+    </nav>
+</header>
+<div class="demo-banner">Local demo — no sign-in. Do not deploy publicly or enter sensitive personal data.</div>
+<main id="main-content" class="public-main">@Body</main>
+<footer class="site-footer">
+    <span>Small steps. New possibilities.</span>
+    <span>WorkshopHub · Course booking demo</span>
+</footer>
+<div id="blazor-error-ui" role="alert">
+    Connection interrupted. <a href="" class="reload">Reload the page</a> and check persisted state before submitting
+    again.
+    <button class="dismiss" aria-label="Dismiss">×</button>
+</div>

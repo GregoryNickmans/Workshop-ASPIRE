@@ -1,0 +1,14 @@
+<Router AppAssembly="typeof(Program).Assembly">
+    <Found Context="routeData">
+        <RouteView RouteData="routeData" DefaultLayout="typeof(Layout.PublicLayout)" />
+        <FocusOnNavigate RouteData="routeData" Selector="h1" />
+    </Found>
+    <NotFound>
+        <LayoutView Layout="typeof(Layout.PublicLayout)">
+            <section class="empty-state">
+                <h1>Page not found</h1>
+                <p>That page is not part of the catalog.</p><a class="button" href="/courses">Explore courses</a>
+            </section>
+        </LayoutView>
+    </NotFound>
+</Router>

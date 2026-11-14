@@ -1,0 +1,11 @@
+@page "/admin"
+@layout WorkshopHub.Web.Components.Layout.AdminLayout
+@inject NavigationManager Navigation
+
+<PageTitle>Admin · WorkshopHub</PageTitle>
+<h1>Opening course management…</h1>
+<p><a href="/admin/courses">Continue to courses</a></p>
+
+@code {
+    protected override void OnInitialized() => Navigation.NavigateTo("/admin/courses", replace: true);
+}
