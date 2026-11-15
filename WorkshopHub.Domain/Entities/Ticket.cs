@@ -21,12 +21,17 @@ public sealed class Ticket
     public DateTimeOffset CreatedAt { get; private set; }
 
     public static ErrorOr<Ticket> Create(BookingId bookingId, CourseId courseId, long length, TimeProvider timeProvider) =>
-        Create(bookingId, courseId, new TicketId(Guid.NewGuid()), length, timeProvider);
+        Create(bookingId, courseId, new TicketId(Guid.NewGuid()), length, timeProvider.GetUtcNow());
 
     // The identity is passed in so a caller can render the PDF with the final ticket reference.
     // Storage key and filename are still derived here, never supplied, so no caller can choose a path.
     public static ErrorOr<Ticket> Create(BookingId bookingId, CourseId courseId, TicketId ticketId, long length,
-        TimeProvider timeProvider)
+        TimeProvider timeProvider) => Create(bookingId, courseId, ticketId, length, timeProvider.GetUtcNow());
+
+    // Timestamp-preserving overload: a ticket generated asynchronously keeps the issuance time that the
+    // approval request chose, so the PDF, the blob and the row all agree on one moment.
+    public static ErrorOr<Ticket> Create(BookingId bookingId, CourseId courseId, TicketId ticketId, long length,
+        DateTimeOffset createdAt)
     {
         if (bookingId.Value == Guid.Empty) { return Error.Validation("Ticket.Booking", "A ticket requires a booking."); }
         if (courseId.Value == Guid.Empty) { return Error.Validation("Ticket.Course", "A ticket requires a course."); }
@@ -34,6 +39,10 @@ public sealed class Ticket
         if (length is <= 0 or > MaximumLength)
         {
             return Error.Validation("Ticket.Length", "A generated ticket must be between 1 byte and 10 MiB.");
+        }
+        if (createdAt == default)
+        {
+            return Error.Validation("Ticket.CreatedAt", "A ticket requires an issuance time.");
         }
 
         return new Ticket
@@ -44,7 +53,7 @@ public sealed class Ticket
             StorageKey = StorageKeyFor(courseId, ticketId),
             FileName = FileNameFor(ticketId),
             Length = length,
-            CreatedAt = timeProvider.GetUtcNow()
+            CreatedAt = createdAt
         };
     }
 

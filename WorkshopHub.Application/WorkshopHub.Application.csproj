@@ -1,6 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <ItemGroup>
     <ProjectReference Include="../WorkshopHub.Domain/WorkshopHub.Domain.csproj" />
+    <ProjectReference Include="../WorkshopHub.Contracts/WorkshopHub.Contracts.csproj" />
     <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" />
   </ItemGroup>
 </Project>

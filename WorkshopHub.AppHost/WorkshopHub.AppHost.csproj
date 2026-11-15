@@ -12,9 +12,12 @@
   <ItemGroup>
     <PackageReference Include="Aspire.Hosting.SqlServer" />
     <PackageReference Include="Aspire.Hosting.Azure.Storage" />
+    <PackageReference Include="Aspire.Hosting.Azure.ServiceBus" />
+    <ProjectReference Include="..\WorkshopHub.Contracts\WorkshopHub.Contracts.csproj" IsAspireProjectResource="false" />
     <ProjectReference Include="..\WorkshopHub.Migrator\WorkshopHub.Migrator.csproj" />
     <ProjectReference Include="..\WorkshopHub.Seeder\WorkshopHub.Seeder.csproj" />
     <ProjectReference Include="..\WorkshopHub.Api\WorkshopHub.Api.csproj" />
+    <ProjectReference Include="..\WorkshopHub.ServiceBusProcessor\WorkshopHub.ServiceBusProcessor.csproj" />
     <ProjectReference Include="..\WorkshopHub.Web\WorkshopHub.Web.csproj" />
   </ItemGroup>
 

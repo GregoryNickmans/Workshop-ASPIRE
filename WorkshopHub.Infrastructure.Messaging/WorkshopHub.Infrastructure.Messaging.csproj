@@ -1,0 +1,9 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+    <ProjectReference Include="../WorkshopHub.Application/WorkshopHub.Application.csproj" />
+    <ProjectReference Include="../WorkshopHub.Contracts/WorkshopHub.Contracts.csproj" />
+    <PackageReference Include="Aspire.Azure.Messaging.ServiceBus" />
+    <PackageReference Include="Azure.Messaging.ServiceBus" />
+  </ItemGroup>
+</Project>

@@ -3,6 +3,7 @@
 @implements IAsyncDisposable
 @inject BookingApiClient BookingApi
 @inject DisplayFormatting Display
+@using WorkshopHub.Contracts.Tickets
 
 <PageTitle>Manage bookings · WorkshopHub</PageTitle>
 <div class="page-heading">
@@ -25,13 +26,20 @@
 @if (_notice is not null)
 {
     @* Kept outside the filtered list so confirming under the Pending filter still offers its ticket. *@
-    <div class="notice @(_notice.TicketId is null ? "warning" : "success")" role="status">
+    <div class="notice @(_notice.TicketId is null ? "warning" : _notice.IsQueued ? "" : "success")" role="status">
         <span>@_notice.Message</span>
         @if (_notice.DownloadUrl is { } downloadUrl)
         {
             <a class="button small" href="@downloadUrl" data-enhance-nav="false">
                 Download ticket
             </a>
+        }
+        else if (_notice.IsQueued)
+        {
+            @* Generation is still in flight; a reload is the honest action, not a download. *@
+            <button class="button small" @onclick="ReloadAsync" disabled="@_busy">
+                Refresh bookings
+            </button>
         }
         else if (_notice.CanRetryTicket)
         {
@@ -304,17 +312,28 @@ LoadPageAsync();
         {
             var confirmation = await BookingApi.ConfirmAsync(id, _lifetime.Token);
             var reference = DisplayFormatting.Reference(id);
-            if (confirmation.TicketId is { } ticketId)
+            if (!string.Equals(confirmation.TicketStatus, TicketRequestStatus.Queued, StringComparison.Ordinal))
             {
-                _tickets[id] = ticketId;
-                _notice = new BookingTicketNotice(id, ticketId, $"Booking {reference} confirmed and its ticket is ready.", false);
+                if (confirmation.TicketId is { } ticketId)
+                {
+                    _tickets[id] = ticketId;
+                    _notice = new BookingTicketNotice(id, ticketId, $"Booking {reference} confirmed and its ticket is ready.", false);
+                }
+                else
+                {
+                    // The confirmation is committed; only ticket generation is missing.
+                    _notice = new BookingTicketNotice(id, null,
+                        confirmation.TicketWarning ?? $"Booking {reference} confirmed, but no ticket was generated.",
+                        BookingTicketNotice.IsRetryable(confirmation.Booking));
+                }
             }
             else
             {
-                // The confirmation is committed; only ticket generation is missing.
-                _notice = new BookingTicketNotice(id, null,
-                    confirmation.TicketWarning ?? $"Booking {reference} confirmed, but no ticket was generated.",
-                    BookingTicketNotice.IsRetryable(confirmation.Booking));
+                // Approval returned before the PDF exists. The identity is stable, so the ticket can be
+                // offered for refresh without pretending a download is available.
+                _notice = new BookingTicketNotice(id, confirmation.TicketId,
+                    confirmation.TicketWarning ?? $"Booking {reference} confirmed. Its ticket is being generated.",
+                    false, isQueued: true);
             }
             await LoadPageAsync();
         }
@@ -335,17 +354,20 @@ LoadPageAsync();
         _busy = true; _error = null; _success = null;
         try
         {
-            var ticket = await BookingApi.IssueTicketAsync(id, _lifetime.Token);
-            _tickets[id] = ticket.Id;
-            _notice = new BookingTicketNotice(id, ticket.Id,
-                $"Ticket for booking {DisplayFormatting.Reference(id)} is ready.", false);
+            var request = await BookingApi.RequestTicketAsync(id, _lifetime.Token);
+            _notice = request.Ticket is { } ticket
+                ? new BookingTicketNotice(id, ticket.Id,
+                    $"Ticket for booking {DisplayFormatting.Reference(id)} is ready.", false)
+                : new BookingTicketNotice(id, request.TicketId,
+                    $"Ticket for booking {DisplayFormatting.Reference(id)} is queued. Refresh in a moment to download it.",
+                    false, isQueued: true);
             await LoadPageAsync();
         }
         catch (OperationCanceledException) when (_lifetime.IsCancellationRequested) { }
         catch (BookingApiException error) { _error = error.Message; await LoadPageAsync(); }
         catch (Exception)
         {
-            // A timeout after rendering is possible: read back whether the ticket actually landed.
+            // A queued request may have been accepted before the connection dropped.
             await LoadPageAsync();
             await RecoverAsync(id, "Ticket generation stopped before the result was known. Check the booking before retrying.");
         }

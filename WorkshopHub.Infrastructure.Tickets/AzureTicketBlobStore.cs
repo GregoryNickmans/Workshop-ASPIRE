@@ -20,19 +20,22 @@ public sealed class AzureTicketBlobStore(BlobContainerClient container, ILogger<
         logger.LogInformation("Ticket storage container '{Container}' is ready.", container.Name);
     }
 
-    public async Task<ErrorOr<string>> UploadAsync(string storageKey, ReadOnlyMemory<byte> content, CancellationToken cancellationToken)
+    public async Task<ErrorOr<TicketBlobReference>> UploadAsync(string storageKey, ReadOnlyMemory<byte> content,
+        TicketBlobIdentity identity, CancellationToken cancellationToken)
     {
         try
         {
             // IfNoneMatch = * means "fail if the key exists": a candidate can never overwrite a winner.
+            // The generation fingerprint is stored with the object so any later delivery can prove it owns it.
             var response = await container.GetBlobClient(storageKey).UploadAsync(
                 BinaryData.FromBytes(content.ToArray()),
                 new BlobUploadOptions
                 {
                     HttpHeaders = new BlobHttpHeaders { ContentType = Ticket.PdfContentType },
+                    Metadata = new Dictionary<string, string> { [TicketBlobIdentity.MetadataName] = identity.Fingerprint },
                     Conditions = new BlobRequestConditions { IfNoneMatch = ETag.All }
                 }, cancellationToken);
-            return response.Value.ETag.ToString();
+            return new TicketBlobReference(response.Value.ETag.ToString(), content.Length);
         }
         catch (RequestFailedException error) when (error.Status is 409 or 412)
         {
@@ -51,6 +54,21 @@ public sealed class AzureTicketBlobStore(BlobContainerClient container, ILogger<
         {
             var response = await container.GetBlobClient(storageKey).DownloadStreamingAsync(cancellationToken: cancellationToken);
             return new TicketBlob(response.Value.Content, response.Value.Details.ContentLength);
+        }
+        catch (RequestFailedException error) when (error.Status == 404)
+        {
+            return null;
+        }
+    }
+
+    public async Task<TicketBlobProperties?> TryGetPropertiesAsync(string storageKey, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var response = await container.GetBlobClient(storageKey).GetPropertiesAsync(cancellationToken: cancellationToken);
+            var properties = response.Value;
+            properties.Metadata.TryGetValue(TicketBlobIdentity.MetadataName, out var generation);
+            return new TicketBlobProperties(properties.ContentLength, properties.ContentType, properties.ETag.ToString(), generation);
         }
         catch (RequestFailedException error) when (error.Status == 404)
         {

@@ -21,11 +21,12 @@ public sealed class TicketQueryExecutor(DatabaseContext database) : ITicketQuery
     }
 
     // Ignores the booking soft-delete filter so a deleted booking returns NotFound instead of incomplete data.
+    // ConfirmedAt is projected because it is the stable issuance time used for asynchronous generation.
     public async Task<TicketSource?> GetSourceAsync(BookingId bookingId, CancellationToken cancellationToken) =>
         await database.Bookings.IgnoreQueryFilters().AsNoTracking()
             .Where(x => x.Id == bookingId)
             .Select(x => new TicketSource(x.Id, x.CourseId ?? default, x.ParticipantName, x.Workshop.Value,
-                x.PriceCents ?? 0, x.Status, x.IsDeleted))
+                x.PriceCents ?? 0, x.Status, x.IsDeleted, x.ConfirmedAt))
             .SingleOrDefaultAsync(cancellationToken);
 
     private static TicketView Map(Ticket ticket) => new(ticket.Id, ticket.BookingId, ticket.CourseId,

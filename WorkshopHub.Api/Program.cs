@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Http.Features;
 using Swashbuckle.AspNetCore.SwaggerUI;
 using WorkshopHub.Infrastructure;
+using WorkshopHub.Infrastructure.Messaging;
 using WorkshopHub.Infrastructure.Persistence;
 using WorkshopHub.Infrastructure.Tickets;
 
@@ -23,7 +24,13 @@ builder.EnrichSqlServerDbContext<DatabaseContext>();
 
 // Blob/browser adapters stay out of Infrastructure so Migrator and Seeder never acquire them.
 // Ticket endpoints are available in every environment; see AdminTicketsController for the security note.
-builder.AddWorkshopTicketIntegrations();
+// The API owns storage, submission and completion-event handling, but never Chromium: rendering is the
+// worker's job, so AddWorkshopTicketRenderer is deliberately absent here.
+builder.AddWorkshopTicketStorage();
+builder.AddWorkshopServiceBusClient();
+builder.AddWorkshopTicketPublisher();
+builder.Services.AddWorkshopTicketPersistenceServices();
+builder.AddWorkshopTicketPersistence();
 
 var app = builder.Build();
 app.UseExceptionHandler();

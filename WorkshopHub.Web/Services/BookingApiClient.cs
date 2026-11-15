@@ -37,15 +37,16 @@ public sealed class BookingApiClient(HttpClient httpClient)
     }
     public Task<AdminBookingResponse> GetBookingAsync(Guid id, CancellationToken cancellationToken) =>
         GetAsync<AdminBookingResponse>($"/api/v1/admin/bookings/{id}", cancellationToken);
-    // The API reports the committed confirmation together with whether a ticket was issued.
+    // The API reports the committed confirmation together with the ticket's identity and whether
+    // generation is still queued. A queued ticket is not downloadable yet.
     public Task<AdminBookingConfirmationResponse> ConfirmAsync(Guid id, CancellationToken cancellationToken) =>
         SendAsync<AdminBookingConfirmationResponse>(HttpMethod.Post, $"/api/v1/admin/bookings/{id}/confirm", null, cancellationToken);
     public Task<AdminBookingResponse> CancelAsync(Guid id, CancellationToken cancellationToken) =>
         SendAsync<AdminBookingResponse>(HttpMethod.Post, $"/api/v1/admin/bookings/{id}/cancel", null, cancellationToken);
-    // Blocks until the PDF exists, exactly like the API endpoint it forwards to. Repeating is safe:
-    // the API returns the ticket persisted by the first call.
-    public Task<TicketResponse> IssueTicketAsync(Guid bookingId, CancellationToken cancellationToken) =>
-        SendAsync<TicketResponse>(HttpMethod.Post, $"/api/v1/admin/bookings/{bookingId}/ticket", null, cancellationToken);
+    // Asks for generation instead of waiting for it. 202 means queued, 200 means the ticket already
+    // exists; both carry the same stable identity, so repeating the request is safe.
+    public Task<TicketRequestResponse> RequestTicketAsync(Guid bookingId, CancellationToken cancellationToken) =>
+        SendAsync<TicketRequestResponse>(HttpMethod.Post, $"/api/v1/admin/bookings/{bookingId}/ticket", null, cancellationToken);
 
     // Returns the upstream PDF response for the caller to stream and dispose. Headers are read first,
     // so a failure status is reported before any bytes reach the browser.

@@ -3,6 +3,7 @@
     <ProjectReference Include="../WorkshopHub.Application/WorkshopHub.Application.csproj" />
     <ProjectReference Include="../WorkshopHub.Infrastructure/WorkshopHub.Infrastructure.csproj" />
     <ProjectReference Include="../WorkshopHub.Infrastructure.Tickets/WorkshopHub.Infrastructure.Tickets.csproj" />
+    <ProjectReference Include="../WorkshopHub.Infrastructure.Messaging/WorkshopHub.Infrastructure.Messaging.csproj" />
     <ProjectReference Include="../WorkshopHub.Contracts/WorkshopHub.Contracts.csproj" />
     <ProjectReference Include="..\WorkshopHub.AppHost.ServiceDefaults\WorkshopHub.AppHost.ServiceDefaults.csproj" />
     <PackageReference Include="Microsoft.AspNetCore.OpenApi" />

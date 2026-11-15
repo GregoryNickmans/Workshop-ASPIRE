@@ -11,12 +11,14 @@ namespace WorkshopHub.Infrastructure;
 
 public static class DependencyInjection
 {
+    // Request-side handlers. The PDF worker composes its own, so the API never registers a renderer.
     public static IServiceCollection AddWorkshopApplicationServices(this IServiceCollection services)
     {
         services.AddSingleton(TimeProvider.System);
         services.AddScoped<BookingService>();
         services.AddScoped<CourseService>();
         services.AddScoped<TicketService>();
+        services.AddScoped<TicketRequestService>();
         return services;
     }
 
@@ -25,6 +27,13 @@ public static class DependencyInjection
     {
         services.AddDbContext<DatabaseContext>(options => options.UseSqlServer(connectionString));
         return services.AddWorkshopEfStores();
+    }
+
+    // Completion-event handling. Only the API registers this, so the worker never acquires SQL.
+    public static IServiceCollection AddWorkshopTicketPersistenceServices(this IServiceCollection services)
+    {
+        services.AddScoped<TicketPersistenceService>();
+        return services;
     }
 
     private static IServiceCollection AddWorkshopEfStores(this IServiceCollection services)
