@@ -46,7 +46,7 @@ TestResults/
 .verify-tmp/
 
 # ---------------------------------------------------------------------------
-# Local SQLite storage and write-ahead-log artifacts
+# Local database and data artifacts
 # ---------------------------------------------------------------------------
 **/App_Data/
 *.db

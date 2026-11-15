@@ -19,21 +19,7 @@ public static class DependencyInjection
         return services;
     }
 
-    // Active starter provider. Keep the derived and base context resolutions in the same scope.
-    public static IServiceCollection AddWorkshopSqlitePersistence(this IServiceCollection services, string databasePath)
-    {
-        var sqliteConnection = new Microsoft.Data.Sqlite.SqliteConnectionStringBuilder
-        {
-            DataSource = databasePath,
-            ForeignKeys = true,
-            DefaultTimeout = 2
-        }.ToString();
-        services.AddDbContext<SqliteBookingsDbContext>(options => options.UseSqlite(sqliteConnection));
-        services.AddScoped<DatabaseContext>(provider => provider.GetRequiredService<SqliteBookingsDbContext>());
-        return services.AddWorkshopEfStores();
-    }
-
-    // Dormant workshop option: runtime and concurrency behaviour require separate verification.
+    // AppHost supplies the SQL Server connection; store registrations stay unchanged.
     public static IServiceCollection AddWorkshopSqlServerPersistence(this IServiceCollection services, string connectionString)
     {
         services.AddDbContext<DatabaseContext>(options => options.UseSqlServer(connectionString));

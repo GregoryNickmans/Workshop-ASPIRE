@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Http.Features;
 using Swashbuckle.AspNetCore.SwaggerUI;
 using WorkshopHub.Infrastructure;
+using WorkshopHub.Infrastructure.Persistence;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -13,10 +14,11 @@ builder.Services.AddProblemDetails();
 
 builder.Services.Configure<FormOptions>(options => options.MultipartBodyLengthLimit = (1024 * 1024) + (64 * 1024));
 
-var databasePath = Path.GetFullPath(builder.Configuration["Storage:DatabasePath"] ?? "App_Data/workshophub.db", builder.Environment.ContentRootPath);
-Directory.CreateDirectory(Path.GetDirectoryName(databasePath)!);
+var connectionString = builder.Configuration.GetConnectionString("database")
+    ?? throw new InvalidOperationException("Run through WorkshopHub.AppHost; connection 'database' is required.");
 builder.Services.AddWorkshopApplicationServices();
-builder.Services.AddWorkshopSqlitePersistence(databasePath);
+builder.Services.AddWorkshopSqlServerPersistence(connectionString);
+builder.EnrichSqlServerDbContext<DatabaseContext>();
 
 var app = builder.Build();
 app.UseExceptionHandler();

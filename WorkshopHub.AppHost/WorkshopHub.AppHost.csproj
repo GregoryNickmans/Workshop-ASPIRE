@@ -10,6 +10,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <PackageReference Include="Aspire.Hosting.SqlServer" />
     <ProjectReference Include="..\WorkshopHub.Api\WorkshopHub.Api.csproj" />
     <ProjectReference Include="..\WorkshopHub.Web\WorkshopHub.Web.csproj" />
   </ItemGroup>

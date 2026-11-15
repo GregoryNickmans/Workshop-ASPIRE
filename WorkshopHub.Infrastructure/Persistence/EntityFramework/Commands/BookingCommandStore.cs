@@ -1,6 +1,6 @@
 using System.Data;
 using ErrorOr;
-using Microsoft.Data.Sqlite;
+using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 using WorkshopHub.Application.Abstractions;
 using WorkshopHub.Application.Models;
@@ -36,7 +36,7 @@ public sealed class BookingCommandStore(DatabaseContext database, TimeProvider t
             var result = cancel ? booking.Cancel(timeProvider) : booking.Confirm(timeProvider);
             if (result.IsError) { return result.Errors; }
             if (previousStatus == booking.Status) { return BookingProjection.Map(booking); }
-            // Conditional transitions also protect against lost updates if another provider uses deferred transactions.
+            // Only apply the transition if the persisted status still matches the state we read.
             var changed = await database.Bookings.Where(x => x.Id == bookingId && x.Status == previousStatus)
                 .ExecuteUpdateAsync(setters => setters.SetProperty(x => x.Status, booking.Status)
                     .SetProperty(x => x.ConfirmedAt, booking.ConfirmedAt).SetProperty(x => x.CancelledAt, booking.CancelledAt), token);
@@ -82,48 +82,32 @@ public sealed class BookingCommandStore(DatabaseContext database, TimeProvider t
 
     private async Task<ErrorOr<T>> ExecuteAsync<T>(Func<CancellationToken, Task<ErrorOr<T>>> command, CancellationToken cancellationToken)
     {
-        // SQLite's non-deferred transaction acquires the writer lock before reading inventory. Retry the entire
-        // transaction only for known BUSY/LOCKED errors. This never repeats an already-committed HTTP operation.
-        for (var attempt = 0; ; attempt++)
+        database.ChangeTracker.Clear();
+        try
+        {
+            await using var transaction = await database.Database.BeginTransactionAsync(IsolationLevel.Serializable, cancellationToken);
+            var result = await command(cancellationToken);
+            if (result.IsError)
+            {
+                await transaction.RollbackAsync(cancellationToken);
+                return result.Errors;
+            }
+            await transaction.CommitAsync(cancellationToken);
+            return result;
+        }
+        catch (DbUpdateException error) when (error.InnerException is SqlException { Number: 2601 or 2627 })
+        {
+            return Error.Conflict("Booking.Duplicate", "This email already has an active booking for this course.");
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            return Error.Conflict("Course.Revision", "This record changed. Reload it before editing.");
+        }
+        finally
         {
             database.ChangeTracker.Clear();
-            try
-            {
-                await using var transaction = await database.Database.BeginTransactionAsync(IsolationLevel.Serializable, cancellationToken);
-                var result = await command(cancellationToken);
-                if (result.IsError)
-                {
-                    await transaction.RollbackAsync(cancellationToken);
-                    return result.Errors;
-                }
-                await transaction.CommitAsync(cancellationToken);
-                return result;
-            }
-            catch (Exception error) when (FindSqlite(error) is { SqliteErrorCode: 5 or 6 })
-            {
-                if (attempt >= 2) { return Error.Conflict("Storage.Busy", "The database is busy. Check persisted state before retrying."); }
-                await Task.Delay(TimeSpan.FromMilliseconds(100 * (attempt + 1)), cancellationToken);
-            }
-            catch (DbUpdateException error) when (FindSqlite(error) is { SqliteExtendedErrorCode: 2067 })
-            {
-                return Error.Conflict("Booking.Duplicate", "This email already has an active booking for this course.");
-            }
-            catch (DbUpdateConcurrencyException)
-            {
-                return Error.Conflict("Course.Revision", "This record changed. Reload it before editing.");
-            }
-            finally
-            {
-                database.ChangeTracker.Clear();
-            }
         }
     }
 
-    private static SqliteException? FindSqlite(Exception? error) => error switch
-    {
-        SqliteException sqlite => sqlite,
-        { InnerException: not null } => FindSqlite(error.InnerException),
-        _ => null
-    };
     private static Error CourseNotFound() => Error.NotFound("Course.NotFound", "Course was not found.");
 }
