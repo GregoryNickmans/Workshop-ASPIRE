@@ -11,6 +11,7 @@
 
   <ItemGroup>
     <PackageReference Include="Aspire.Hosting.SqlServer" />
+    <ProjectReference Include="..\WorkshopHub.Migrator\WorkshopHub.Migrator.csproj" />
     <ProjectReference Include="..\WorkshopHub.Api\WorkshopHub.Api.csproj" />
     <ProjectReference Include="..\WorkshopHub.Web\WorkshopHub.Web.csproj" />
   </ItemGroup>

@@ -33,8 +33,8 @@ public sealed class InitialBookings : Migration
         // String-based historical model avoids applying the new aggregate's soft-delete property to old history.
         modelBuilder.Entity("WorkshopHub.Domain.Booking", booking =>
         {
-            booking.HasKey("Id");
             booking.Property<Guid>("Id");
+            booking.HasKey("Id");
             booking.Property<string>("Workshop").HasMaxLength(80).IsRequired();
             booking.Property<string>("Status").HasMaxLength(20).HasDefaultValue("Pending").IsRequired();
             booking.Property<DateTimeOffset>("CreatedAt").IsRequired();
