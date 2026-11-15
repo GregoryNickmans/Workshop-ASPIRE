@@ -16,6 +16,7 @@ public static class DependencyInjection
         services.AddSingleton(TimeProvider.System);
         services.AddScoped<BookingService>();
         services.AddScoped<CourseService>();
+        services.AddScoped<TicketService>();
         return services;
     }
 
@@ -33,6 +34,9 @@ public static class DependencyInjection
         services.AddScoped<IQueryExecutor>(provider => provider.GetRequiredService<QueryExecutor>());
         services.AddScoped<ICourseQueryExecutor>(provider => provider.GetRequiredService<QueryExecutor>());
         services.AddScoped<IBookingCommandStore, BookingCommandStore>();
+        services.AddScoped<TicketQueryExecutor>();
+        services.AddScoped<ITicketQueryExecutor>(provider => provider.GetRequiredService<TicketQueryExecutor>());
+        services.AddScoped<ITicketStore, TicketStore>();
         return services;
     }
 }

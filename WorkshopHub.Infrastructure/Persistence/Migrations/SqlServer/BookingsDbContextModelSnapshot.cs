@@ -17,12 +17,12 @@ namespace WorkshopHub.Infrastructure.Persistence.Migrations
         {
 #pragma warning disable 612, 618
             modelBuilder
-                .HasAnnotation("ProductVersion", "10.0.12")
+                .HasAnnotation("ProductVersion", "10.0.15")
                 .HasAnnotation("Relational:MaxIdentifierLength", 128);
 
             SqlServerModelBuilderExtensions.UseIdentityColumns(modelBuilder);
 
-            modelBuilder.Entity("WorkshopHub.Domain.Booking", b =>
+            modelBuilder.Entity("WorkshopHub.Domain.Entities.Booking", b =>
                 {
                     b.Property<Guid>("Id")
                         .HasColumnType("uniqueidentifier");
@@ -101,7 +101,7 @@ namespace WorkshopHub.Infrastructure.Persistence.Migrations
                         });
                 });
 
-            modelBuilder.Entity("WorkshopHub.Domain.Course", b =>
+            modelBuilder.Entity("WorkshopHub.Domain.Entities.Course", b =>
                 {
                     b.Property<Guid>("Id")
                         .HasColumnType("uniqueidentifier");
@@ -148,12 +148,78 @@ namespace WorkshopHub.Infrastructure.Persistence.Migrations
                         });
                 });
 
-            modelBuilder.Entity("WorkshopHub.Domain.Booking", b =>
+            modelBuilder.Entity("WorkshopHub.Domain.Entities.Ticket", b =>
                 {
-                    b.HasOne("WorkshopHub.Domain.Course", null)
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("BookingId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("ContentType")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<Guid>("CourseId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<string>("FileName")
+                        .IsRequired()
+                        .HasMaxLength(120)
+                        .HasColumnType("nvarchar(120)");
+
+                    b.Property<long>("Length")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("StorageKey")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("BookingId")
+                        .IsUnique();
+
+                    b.HasIndex("CourseId");
+
+                    b.HasIndex("CreatedAt");
+
+                    b.ToTable("Tickets", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_Tickets_ContentType", "[ContentType] = 'application/pdf'");
+
+                            t.HasCheckConstraint("CK_Tickets_Length", "[Length] > 0 AND [Length] <= 10485760");
+
+                            t.HasCheckConstraint("CK_Tickets_StorageKey", "[StorageKey] LIKE '%.pdf'");
+                        });
+                });
+
+            modelBuilder.Entity("WorkshopHub.Domain.Entities.Booking", b =>
+                {
+                    b.HasOne("WorkshopHub.Domain.Entities.Course", null)
                         .WithMany()
                         .HasForeignKey("CourseId")
                         .OnDelete(DeleteBehavior.Restrict);
+                });
+
+            modelBuilder.Entity("WorkshopHub.Domain.Entities.Ticket", b =>
+                {
+                    b.HasOne("WorkshopHub.Domain.Entities.Booking", null)
+                        .WithMany()
+                        .HasForeignKey("BookingId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("WorkshopHub.Domain.Entities.Course", null)
+                        .WithMany()
+                        .HasForeignKey("CourseId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
                 });
 #pragma warning restore 612, 618
         }

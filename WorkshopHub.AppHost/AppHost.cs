@@ -1,4 +1,3 @@
-using Aspire.Hosting.ApplicationModel;
 using Microsoft.Extensions.Hosting;
 
 var builder = DistributedApplication.CreateBuilder(args);
@@ -6,6 +5,16 @@ var builder = DistributedApplication.CreateBuilder(args);
 var database = builder.AddSqlServer("sqlServer")
     .WithDataVolume()
     .AddDatabase("database");
+
+// Persistent Azurite so locally generated ticket PDFs survive AppHost restarts.
+// The logical resource is "Tickets"; Azure requires a lowercase physical container name.
+var storage = builder.AddAzureStorage("storage")
+    .RunAsEmulator(container =>
+    {
+        container.WithDataVolume();
+        container.WithBlobPort(10000);
+    });
+var tickets = storage.AddBlobContainer("tickets");
 
 var migrations = builder.AddProject<Projects.WorkshopHub_Migrator>("migrations")
     .WithReference(database)
@@ -15,6 +24,8 @@ var backendApi = builder.AddProject<Projects.WorkshopHub_Api>("backendApi")
     .WithReference(database)
     .WaitFor(database)
     .WaitForCompletion(migrations)
+    .WithReference(tickets)
+    .WaitFor(storage)
     .WithHttpHealthCheck("/health");
 
 builder.AddProject<Projects.WorkshopHub_Web>("frontend")

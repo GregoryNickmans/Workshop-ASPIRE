@@ -1,0 +1,12 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+    <ProjectReference Include="../WorkshopHub.Application/WorkshopHub.Application.csproj" />
+    <PackageReference Include="Aspire.Azure.Storage.Blobs" />
+    <PackageReference Include="Microsoft.Playwright" />
+  </ItemGroup>
+  <ItemGroup>
+    <!-- Self-contained print template; embedded so no runtime file or web access is needed. -->
+    <EmbeddedResource Include="Templates/TicketTemplate.html" />
+  </ItemGroup>
+</Project>

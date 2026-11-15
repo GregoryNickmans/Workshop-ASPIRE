@@ -87,6 +87,7 @@ h1:focus { outline: none; }
 .notice { background: var(--surface-soft); border: 1px solid var(--border); border-radius: .7rem; padding: 1rem 1.2rem; font-size: .88rem; margin-bottom: 1.3rem; display: flex; gap: 1rem; align-items: center; flex-wrap: wrap; }
 .notice.error { background: var(--red-bg); color: var(--red); border-color: transparent; }
 .notice.success { background: var(--green-bg); color: var(--green); border-color: transparent; }
+.notice.warning { background: var(--amber-bg); color: var(--amber); border-color: transparent; }
 .loading-state, .empty-state { padding: 3rem 1.5rem; text-align: center; border: 1px dashed var(--border); border-radius: 1rem; color: var(--muted); margin: 1.5rem 0; }
 .empty-state h1, .empty-state h2, .empty-state h3 { color: var(--fg); }
 .loading-state { display: flex; align-items: center; justify-content: center; gap: .8rem; }

@@ -22,6 +22,25 @@
         </button>
     </div>
 }
+@if (_notice is not null)
+{
+    @* Kept outside the filtered list so confirming under the Pending filter still offers its ticket. *@
+    <div class="notice @(_notice.TicketId is null ? "warning" : "success")" role="status">
+        <span>@_notice.Message</span>
+        @if (_notice.DownloadUrl is { } downloadUrl)
+        {
+            <a class="button small" href="@downloadUrl" data-enhance-nav="false">
+                Download ticket
+            </a>
+        }
+        else if (_notice.CanRetryTicket)
+        {
+            <button class="button small" @onclick="() => GenerateTicketAsync(_notice.BookingId)" disabled="@_busy">
+                @(_busy ? "Generating…" : "Retry ticket generation")
+            </button>
+        }
+    </div>
+}
 @if (_success is not null)
 {
     <div class="notice success" role="status">@_success</div>
@@ -148,11 +167,38 @@ else if (_page is not null)
                         </details>
                     </div>
                     <div class="booking-card-actions">
+                        @{
+                            // A generation in this session wins over the page's snapshot; after a reload the snapshot is current.
+                            var ticketId = _tickets.TryGetValue(booking.Id, out var generated) ? generated : booking.TicketId;
+                        }
                         @if (booking.Status == "Pending")
                         {
                             <button class="button small" @onclick="() => ConfirmAsync(booking.Id)" disabled="@_busy">
                                 Confirm place
                             </button>
+                        }
+                        else if (booking.Status == "Confirmed")
+                        {
+                            @if (ticketId is { } persistedTicketId)
+                            {
+                                <a class="button small" href="@TicketDownloads.Url(persistedTicketId)" data-enhance-nav="false">
+                                    Download ticket
+                                </a>
+                            }
+                            else if (booking.IsLegacy)
+                            {
+                                <span class="caption">No ticket: legacy booking, not linked to a course.</span>
+                            }
+                            else if (string.IsNullOrWhiteSpace(booking.ParticipantName))
+                            {
+                                <span class="caption">No ticket: this booking has no attendee name to print.</span>
+                            }
+                            else
+                            {
+                                <button class="button small" @onclick="() => GenerateTicketAsync(booking.Id)" disabled="@_busy">
+                                    @(_busy ? "Generating…" : "Generate ticket")
+                                </button>
+                            }
                         }
                         @if (booking.Status != "Cancelled")
                         {
@@ -185,6 +231,9 @@ else if (_page is not null)
     private CancellationTokenSource? _request;
     private List<AdminCourseResponse> _courses = [];
     private PagedResponse<AdminBookingResponse>? _page;
+    // Ticket IDs issued during this session, for bookings the current page may not include.
+    private readonly Dictionary<Guid, Guid> _tickets = [];
+    private BookingTicketNotice? _notice;
     private AdminBookingResponse? _cancel;
     private Guid? _previousCourseId;
     private bool _initialized;
@@ -221,9 +270,10 @@ CourseId; _pageNumber = 1; await LoadPageAsync();
         catch (Exception) { _error = "The course filter couldn't be refreshed."; }
         await LoadPageAsync();
     }
+    // Filter changes clear the notice so a stale download or retry action cannot outlive its filter.
     private Task ApplyFiltersAsync()
     {
-        _pageNumber = 1; _cancel = null; _error = null; _success = null; return
+        _pageNumber = 1; _cancel = null; _error = null; _success = null; _notice = null; return
 LoadPageAsync();
     }
     private Task ClearFiltersAsync() { _courseFilter = ""; _search = ""; _status = ""; return ApplyFiltersAsync(); }
@@ -249,23 +299,88 @@ LoadPageAsync();
     private async Task ConfirmAsync(Guid id)
     {
         if (_busy) { return; }
-        _busy = true; _error = null; _success = null;
-        try { await BookingApi.ConfirmAsync(id, _lifetime.Token); _success = $"Booking {DisplayFormatting.Reference(id)} confirmed."; await LoadPageAsync(); }
+        _busy = true; _error = null; _success = null; _notice = null;
+        try
+        {
+            var confirmation = await BookingApi.ConfirmAsync(id, _lifetime.Token);
+            var reference = DisplayFormatting.Reference(id);
+            if (confirmation.TicketId is { } ticketId)
+            {
+                _tickets[id] = ticketId;
+                _notice = new BookingTicketNotice(id, ticketId, $"Booking {reference} confirmed and its ticket is ready.", false);
+            }
+            else
+            {
+                // The confirmation is committed; only ticket generation is missing.
+                _notice = new BookingTicketNotice(id, null,
+                    confirmation.TicketWarning ?? $"Booking {reference} confirmed, but no ticket was generated.",
+                    BookingTicketNotice.IsRetryable(confirmation.Booking));
+            }
+            await LoadPageAsync();
+        }
         catch (OperationCanceledException) when (_lifetime.IsCancellationRequested) { }
         catch (BookingApiException error) { _error = error.Message; await LoadPageAsync(); }
-        catch (Exception) { _error = "The confirmation outcome is uncertain. Refresh persisted state before retrying."; }
+        catch (Exception)
+        {
+            // The outcome is unknown, so read the record back before offering a retry action.
+            _error = "The confirmation outcome is uncertain. Refresh persisted state before retrying.";
+            await LoadPageAsync();
+            await RecoverAsync(id, "The confirmation outcome is uncertain. Check the booking's status before retrying.");
+        }
         finally { _busy = false; }
+    }
+    private async Task GenerateTicketAsync(Guid id)
+    {
+        if (_busy) { return; }
+        _busy = true; _error = null; _success = null;
+        try
+        {
+            var ticket = await BookingApi.IssueTicketAsync(id, _lifetime.Token);
+            _tickets[id] = ticket.Id;
+            _notice = new BookingTicketNotice(id, ticket.Id,
+                $"Ticket for booking {DisplayFormatting.Reference(id)} is ready.", false);
+            await LoadPageAsync();
+        }
+        catch (OperationCanceledException) when (_lifetime.IsCancellationRequested) { }
+        catch (BookingApiException error) { _error = error.Message; await LoadPageAsync(); }
+        catch (Exception)
+        {
+            // A timeout after rendering is possible: read back whether the ticket actually landed.
+            await LoadPageAsync();
+            await RecoverAsync(id, "Ticket generation stopped before the result was known. Check the booking before retrying.");
+        }
+        finally { _busy = false; }
+    }
+    // Replaces an optimistic notice with the persisted truth, so a download or retry action is never guessed.
+    private async Task RecoverAsync(Guid id, string uncertainMessage)
+    {
+        try
+        {
+            var booking = await BookingApi.GetBookingAsync(id, _lifetime.Token);
+            if (booking.TicketId is not { } ticketId)
+            {
+                _notice = new BookingTicketNotice(id, null, uncertainMessage, BookingTicketNotice.IsRetryable(booking));
+                return;
+            }
+            _tickets[id] = ticketId;
+            _notice = new BookingTicketNotice(id, ticketId, $"Booking {DisplayFormatting.Reference(id)} has a ticket ready.", false);
+            _error = null;
+        }
+        catch (OperationCanceledException) when (_lifetime.IsCancellationRequested) { }
+        catch (Exception) { _notice = null; }
     }
     private async Task CancelAsync()
     {
         if (_busy || _cancel is null) { return; }
         _busy = true; _error = null; _success = null;
         var id = _cancel.Id;
-        try { await BookingApi.CancelAsync(id, _lifetime.Token); _cancel = null; _success = $"Booking {DisplayFormatting.Reference(id)} cancelled. Course availability has been updated."; await LoadPageAsync(); }
+        try { await BookingApi.CancelAsync(id, _lifetime.Token); _cancel = null; ClearTicketMemory(id); _success = $"Booking {DisplayFormatting.Reference(id)} cancelled. Course availability has been updated."; await LoadPageAsync(); }
         catch (OperationCanceledException) when (_lifetime.IsCancellationRequested) { }
         catch (BookingApiException error) { _error = error.Message; await LoadPageAsync(); }
         catch (Exception) { _error = "The cancellation outcome is uncertain. Refresh persisted state before retrying."; }
         finally { _busy = false; }
     }
+    // Clears the session's ticket cache whenever a booking changes, so only persisted state is shown.
+    private void ClearTicketMemory(Guid id) { _tickets.Remove(id); if (_notice?.BookingId == id) { _notice = null; } }
     public async ValueTask DisposeAsync() { await _lifetime.CancelAsync(); _request?.Dispose(); _lifetime.Dispose(); }
 }

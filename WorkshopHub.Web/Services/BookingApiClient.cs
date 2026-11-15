@@ -5,6 +5,7 @@ using WorkshopHub.Contracts.Admin.Courses;
 using WorkshopHub.Contracts.Bookings;
 using WorkshopHub.Contracts.Common;
 using WorkshopHub.Contracts.Courses;
+using WorkshopHub.Contracts.Tickets;
 
 namespace WorkshopHub.Web.Services;
 
@@ -36,10 +37,25 @@ public sealed class BookingApiClient(HttpClient httpClient)
     }
     public Task<AdminBookingResponse> GetBookingAsync(Guid id, CancellationToken cancellationToken) =>
         GetAsync<AdminBookingResponse>($"/api/v1/admin/bookings/{id}", cancellationToken);
-    public Task<AdminBookingResponse> ConfirmAsync(Guid id, CancellationToken cancellationToken) =>
-        SendAsync<AdminBookingResponse>(HttpMethod.Post, $"/api/v1/admin/bookings/{id}/confirm", null, cancellationToken);
+    // The API reports the committed confirmation together with whether a ticket was issued.
+    public Task<AdminBookingConfirmationResponse> ConfirmAsync(Guid id, CancellationToken cancellationToken) =>
+        SendAsync<AdminBookingConfirmationResponse>(HttpMethod.Post, $"/api/v1/admin/bookings/{id}/confirm", null, cancellationToken);
     public Task<AdminBookingResponse> CancelAsync(Guid id, CancellationToken cancellationToken) =>
         SendAsync<AdminBookingResponse>(HttpMethod.Post, $"/api/v1/admin/bookings/{id}/cancel", null, cancellationToken);
+    // Blocks until the PDF exists, exactly like the API endpoint it forwards to. Repeating is safe:
+    // the API returns the ticket persisted by the first call.
+    public Task<TicketResponse> IssueTicketAsync(Guid bookingId, CancellationToken cancellationToken) =>
+        SendAsync<TicketResponse>(HttpMethod.Post, $"/api/v1/admin/bookings/{bookingId}/ticket", null, cancellationToken);
+
+    // Returns the upstream PDF response for the caller to stream and dispose. Headers are read first,
+    // so a failure status is reported before any bytes reach the browser.
+    public async Task<HttpResponseMessage> OpenTicketPdfAsync(Guid ticketId, CancellationToken cancellationToken)
+    {
+        var response = await httpClient.GetAsync($"/api/v1/admin/tickets/{ticketId}/pdf",
+            HttpCompletionOption.ResponseHeadersRead, cancellationToken);
+        if (response.IsSuccessStatusCode) { return response; }
+        using (response) { throw await CreateFailureAsync(response, cancellationToken); }
+    }
 
     private async Task<T> GetAsync<T>(string uri, CancellationToken cancellationToken)
     {
@@ -60,6 +76,11 @@ public sealed class BookingApiClient(HttpClient httpClient)
             return await response.Content.ReadFromJsonAsync<T>(cancellationToken)
                 ?? throw new BookingApiException("The API returned an empty response. Refresh persisted state before retrying.", response.StatusCode);
         }
+        throw await CreateFailureAsync(response, cancellationToken);
+    }
+    // One ProblemDetails parser for every failure shape, so callers see the API's own status and detail.
+    private static async Task<BookingApiException> CreateFailureAsync(HttpResponseMessage response, CancellationToken cancellationToken)
+    {
         var message = $"The API returned {(int)response.StatusCode}. Refresh persisted state before retrying.";
         string? code = null;
         try
@@ -79,6 +100,6 @@ public sealed class BookingApiClient(HttpClient httpClient)
             }
         }
         catch (JsonException) { /* Non-ProblemDetails errors retain a safe status-only message. */ }
-        throw new BookingApiException(message, response.StatusCode, code);
+        return new BookingApiException(message, response.StatusCode, code);
     }
 }

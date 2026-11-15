@@ -10,9 +10,11 @@ public class DatabaseContext : DbContext
     protected DatabaseContext(DbContextOptions options) : base(options) { }
     public DbSet<Booking> Bookings => Set<Booking>();
     public DbSet<Course> Courses => Set<Course>();
+    public DbSet<Ticket> Tickets => Set<Ticket>();
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         modelBuilder.ApplyConfiguration(new BookingConfiguration());
         modelBuilder.ApplyConfiguration(new CourseConfiguration());
+        modelBuilder.ApplyConfiguration(new TicketConfiguration());
     }
 }

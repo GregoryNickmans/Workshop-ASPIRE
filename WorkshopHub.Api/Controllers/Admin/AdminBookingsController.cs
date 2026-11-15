@@ -26,11 +26,14 @@ public sealed class AdminBookingsController(BookingService bookingService, Cours
         var result = await bookingService.GetAsync(new BookingId(id), cancellationToken);
         return result.IsError ? Failure(result.Errors) : Ok(AdminBooking(result.Value));
     }
+    // Confirming also issues the ticket. A ticket failure still reports the committed confirmation
+    // together with a safe warning, so the caller knows a retry of ticket generation is all that is left.
     [HttpPost("{id:guid}/confirm")]
     public async Task<IActionResult> Confirm(Guid id, CancellationToken cancellationToken)
     {
+        Response.Headers.CacheControl = "no-store";
         var result = await bookingService.ConfirmAsync(new BookingId(id), cancellationToken);
-        return result.IsError ? Failure(result.Errors) : Ok(AdminBooking(result.Value));
+        return result.IsError ? Failure(result.Errors) : Ok(Confirmation(result.Value));
     }
     [HttpPost("{id:guid}/cancel")]
     public async Task<IActionResult> Cancel(Guid id, CancellationToken cancellationToken)

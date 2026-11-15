@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Http.Features;
 using Swashbuckle.AspNetCore.SwaggerUI;
 using WorkshopHub.Infrastructure;
 using WorkshopHub.Infrastructure.Persistence;
+using WorkshopHub.Infrastructure.Tickets;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -20,6 +21,10 @@ builder.Services.AddWorkshopApplicationServices();
 builder.Services.AddWorkshopSqlServerPersistence(connectionString);
 builder.EnrichSqlServerDbContext<DatabaseContext>();
 
+// Blob/browser adapters stay out of Infrastructure so Migrator and Seeder never acquire them.
+// Ticket endpoints are available in every environment; see AdminTicketsController for the security note.
+builder.AddWorkshopTicketIntegrations();
+
 var app = builder.Build();
 app.UseExceptionHandler();
 app.UseStatusCodePages();
@@ -32,6 +37,9 @@ if (app.Environment.IsDevelopment())
         options.DocExpansion(DocExpansion.List);
     });
 }
+
+// Create the private container before serving so readiness never depends on the first ticket request.
+app.Services.EnsureTicketStorageAsync().GetAwaiter().GetResult();
 
 app.MapControllers();
 app.MapOpenApi();

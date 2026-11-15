@@ -5,6 +5,7 @@ using WorkshopHub.Contracts.Admin.Bookings;
 using WorkshopHub.Contracts.Admin.Courses;
 using WorkshopHub.Contracts.Bookings;
 using WorkshopHub.Contracts.Courses;
+using WorkshopHub.Contracts.Tickets;
 
 namespace WorkshopHub.Api.Controllers;
 
@@ -28,5 +29,9 @@ public abstract class WorkshopController : ControllerBase
     protected static AdminBookingResponse AdminBooking(BookingView booking) => new(booking.Id.Value,
         booking.CourseId?.Value ?? Guid.Empty, booking.Workshop.Value, booking.PriceCents / 100m, booking.ParticipantName,
         booking.ParticipantEmail, booking.Status, booking.CreatedAt, booking.ConfirmedAt, booking.CancelledAt,
-        booking.CourseId is null);
+        booking.CourseId is null, booking.TicketId?.Value);
+    protected static AdminBookingConfirmationResponse Confirmation(BookingConfirmation confirmation) =>
+        new(AdminBooking(confirmation.Booking), confirmation.Ticket?.Id.Value, confirmation.TicketWarning);
+    protected static TicketResponse Ticket(TicketView ticket) => new(ticket.Id.Value, ticket.BookingId.Value,
+        ticket.CourseId.Value, ticket.FileName, ticket.ContentType, ticket.Length, ticket.CreatedAt);
 }

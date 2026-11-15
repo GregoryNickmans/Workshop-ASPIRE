@@ -10,15 +10,21 @@ public sealed class QueryExecutor(DatabaseContext database) : IQueryExecutor, IC
     // Historical internal cloud consumer; public API no longer exposes this bounded list.
     public async Task<IReadOnlyList<BookingView>> ListAsync(CancellationToken cancellationToken) =>
         (await database.Bookings.AsNoTracking().OrderByDescending(x => x.CreatedAt).ThenBy(x => x.Id).Take(25)
-            .ToListAsync(cancellationToken)).Select(BookingProjection.Map).ToArray();
+            .ToListAsync(cancellationToken)).Select(x => BookingProjection.Map(x)).ToArray();
+
+    // Detail reads carry ticket availability so the portal never has to issue a follow-up request.
     public async Task<BookingView?> GetAsync(BookingId bookingId, CancellationToken cancellationToken)
     {
         var booking = await database.Bookings.AsNoTracking().SingleOrDefaultAsync(x => x.Id == bookingId, cancellationToken);
-        return booking is null ? null : BookingProjection.Map(booking);
+        if (booking is null) { return null; }
+        var ticketId = await database.Tickets.AsNoTracking()
+            .Where(x => x.BookingId == bookingId).Select(x => x.Id).SingleOrDefaultAsync(cancellationToken);
+        return BookingProjection.Map(booking, ticketId.Value == Guid.Empty ? null : ticketId);
     }
+
     public async Task<IReadOnlyList<CourseView>> ListCoursesAsync(bool includeArchived, CancellationToken cancellationToken) =>
         (await database.Courses.AsNoTracking().Where(x => includeArchived || !x.IsArchived)
-            .OrderBy(x => x.Title).ThenBy(x => x.Id).ToListAsync(cancellationToken)).Select(BookingProjection.Map).ToArray();
+            .OrderBy(x => x.Title).ThenBy(x => x.Id).ToListAsync(cancellationToken)).Select(x => BookingProjection.Map(x)).ToArray();
     public async Task<CourseView?> GetCourseAsync(CourseId courseId, bool includeArchived, CancellationToken cancellationToken)
     {
         var course = await database.Courses.AsNoTracking().SingleOrDefaultAsync(x => x.Id == courseId && (includeArchived || !x.IsArchived), cancellationToken);
@@ -27,7 +33,7 @@ public sealed class QueryExecutor(DatabaseContext database) : IQueryExecutor, IC
     public Task<BookingPage> ListBookingsAsync(BookingFilter filter, CancellationToken cancellationToken) =>
         database.Database.CreateExecutionStrategy().ExecuteAsync<BookingPage>(async token =>
         {
-            // Retry the count and page together within one read transaction.
+            // Retry the count, page and ticket metadata together within one read transaction.
             await using var transaction = await database.Database.BeginTransactionAsync(token);
             var query = database.Bookings.AsNoTracking();
             if (!string.IsNullOrEmpty(filter.Search))
@@ -56,7 +62,16 @@ public sealed class QueryExecutor(DatabaseContext database) : IQueryExecutor, IC
             var count = await query.CountAsync(token);
             var bookings = await query.OrderByDescending(x => x.CreatedAt).ThenBy(x => x.Id)
                 .Skip((filter.Page - 1) * filter.PageSize).Take(filter.PageSize).ToListAsync(token);
+            // One extra query for the whole page instead of a lookup per row.
+            var bookingIds = bookings.Select(x => x.Id).ToArray();
+            var tickets = bookingIds.Length == 0
+                ? []
+                : await database.Tickets.AsNoTracking().Where(x => bookingIds.Contains(x.BookingId))
+                    .Select(x => new { x.BookingId, x.Id }).ToListAsync(token);
             await transaction.CommitAsync(token);
-            return new BookingPage(bookings.Select(BookingProjection.Map).ToArray(), count, filter.Page, filter.PageSize);
+            var ticketByBooking = tickets.ToDictionary(x => x.BookingId, x => x.Id);
+            return new BookingPage(bookings.Select(x =>
+                BookingProjection.Map(x, ticketByBooking.TryGetValue(x.Id, out var ticketId) ? ticketId : null)).ToArray(),
+                count, filter.Page, filter.PageSize);
         }, cancellationToken);
 }

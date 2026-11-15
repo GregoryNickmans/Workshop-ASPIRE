@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>WorkshopHub ticket</title>
+<style>
+    /* Site palette (app.css, light theme) made print-stable: no media queries, no external assets. */
+    @page { size: A4; margin: 0; }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; padding: 0; }
+    body {
+        font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+        background: #f8f7f3; color: #26232d; line-height: 1.6;
+        -webkit-print-color-adjust: exact; print-color-adjust: exact;
+    }
+    .page { width: 210mm; height: 297mm; padding: 18mm; display: flex; flex-direction: column; }
+    .sheet { flex: 1; display: flex; flex-direction: column; }
+    .sheet-body { flex: 1; display: flex; align-items: center; }
+    .ticket-wrap { width: 100%; }
+
+    header { display: flex; align-items: center; justify-content: space-between; gap: 12mm; margin-bottom: 9mm; }
+    .brand { display: flex; align-items: center; gap: 3mm; font-size: 16pt; font-weight: 700; letter-spacing: -.035em; }
+    .brand-mark {
+        width: 11mm; height: 11mm; border-radius: 3mm; background: #6342c4; color: #fff;
+        display: flex; align-items: center; justify-content: center;
+        font-size: 15pt; font-weight: 700; letter-spacing: -.05em; padding-bottom: .5mm;
+    }
+    .conf-badge {
+        display: inline-flex; align-items: center; gap: 2mm; padding: 1.6mm 4mm; border-radius: 8mm;
+        background: #eaf5ee; color: #296746; font-size: 8.5pt; font-weight: 700;
+        text-transform: uppercase; letter-spacing: .08em; white-space: nowrap;
+    }
+    .conf-badge span { font-size: 10pt; line-height: 1; }
+
+    /* Landscape ticket card inside a portrait page. */
+    .ticket {
+        display: flex; background: #fff; border: .3mm solid #e5e1e9; border-radius: 6mm;
+        overflow: hidden; box-shadow: 0 2mm 6mm rgba(50, 37, 68, .06);
+    }
+    .ticket-main { flex: 1 1 auto; min-width: 0; padding: 12mm 12mm 9mm; display: flex; flex-direction: column; }
+    .eyebrow {
+        color: #6342c4; text-transform: uppercase; font-size: 8pt; letter-spacing: .15em;
+        font-weight: 750; margin: 0 0 3mm;
+    }
+    h1 {
+        margin: 0 0 6mm; font-size: 27pt; line-height: 1.08; letter-spacing: -.045em; font-weight: 650;
+        overflow-wrap: anywhere; word-break: break-word;
+    }
+    .attendee-label {
+        margin: 0 0 1mm; font-size: 7.5pt; text-transform: uppercase; letter-spacing: .12em;
+        color: #6b6675; font-weight: 700;
+    }
+    .attendee-name {
+        margin: 0 0 9mm; font-size: 16pt; font-weight: 650; letter-spacing: -.02em;
+        overflow-wrap: anywhere; word-break: break-word;
+    }
+    .facts { display: flex; gap: 10mm; margin-top: auto; padding-top: 6mm; border-top: .3mm solid #e5e1e9; }
+    .fact { min-width: 0; }
+    .fact dt {
+        margin: 0 0 1mm; font-size: 7pt; text-transform: uppercase; letter-spacing: .12em;
+        color: #6b6675; font-weight: 700;
+    }
+    .fact dd { margin: 0; font-size: 10.5pt; font-weight: 600; overflow-wrap: anywhere; }
+    .fact .caption { display: block; font-size: 7.5pt; font-weight: 400; color: #6b6675; margin-top: .8mm; }
+
+    /* Reference stub with a perforation rule. */
+    .stub {
+        flex: 0 0 62mm; padding: 12mm 9mm 9mm; background: #f0edf7;
+        border-left: .4mm dashed #c9bde6; display: flex; flex-direction: column; justify-content: space-between;
+    }
+    .stub .eyebrow { margin-bottom: 2.5mm; }
+    .stub .reference {
+        font-family: ui-monospace, "Cascadia Code", "Consolas", monospace; font-size: 10pt;
+        letter-spacing: .04em; color: #26232d; word-break: break-all; line-height: 1.45;
+    }
+    .stub .reference + .caption { margin-top: 2mm; }
+    .stub .caption { font-size: 7pt; color: #6b6675; line-height: 1.5; }
+    .stub-block + .stub-block { margin-top: 6mm; }
+    .orbit {
+        position: relative; height: 18mm; margin: 4mm 0 0; overflow: hidden;
+        border-radius: 4mm; background: #e5ddfb;
+    }
+    .orbit i { position: absolute; border: .3mm solid #6342c4; opacity: .35; border-radius: 50%; }
+    .orbit .one { width: 34mm; height: 14mm; left: -4mm; top: 7mm; transform: rotate(-18deg); }
+    .orbit .two { width: 40mm; height: 17mm; left: 12mm; top: 1mm; transform: rotate(24deg); }
+    .orbit .dot { position: absolute; right: 5mm; top: 4mm; width: 3mm; height: 3mm; border-radius: 50%;
+        background: #6342c4; opacity: .55; border: 0; }
+
+    footer {
+        display: flex; justify-content: space-between; gap: 8mm; margin-top: 7mm;
+        padding-top: 5mm; border-top: .3mm solid #e5e1e9; font-size: 7.5pt; color: #6b6675;
+    }
+    footer .note { max-width: 120mm; }
+</style>
+</head>
+<body>
+<div class="page">
+    <div class="sheet">
+        <header>
+            <div class="brand"><span class="brand-mark">w.</span>WorkshopHub</div>
+            <div class="conf-badge"><span>&#10003;</span>Booking confirmed</div>
+        </header>
+
+        <section class="sheet-body">
+            <div class="ticket-wrap">
+                <div class="ticket">
+                    <div class="ticket-main">
+                        <p class="eyebrow">Attendee ticket</p>
+                        <h1>{{CourseTitle}}</h1>
+                        <p class="attendee-label">Issued to</p>
+                        <p class="attendee-name">{{AttendeeName}}</p>
+                        <dl class="facts">
+                            <div class="fact">
+                                <dt>Booked price</dt>
+                                <dd>{{Price}}<span class="caption">informational · no payment collected</span></dd>
+                            </div>
+                            <div class="fact">
+                                <dt>Issued</dt>
+                                <dd>{{IssuedAt}}</dd>
+                            </div>
+                        </dl>
+                    </div>
+
+                    <aside class="stub">
+                        <div>
+                            <div class="stub-block">
+                                <p class="eyebrow">Ticket reference</p>
+                                <p class="reference">{{TicketId}}</p>
+                                <p class="caption">Full ticket identifier</p>
+                            </div>
+                            <div class="stub-block">
+                                <p class="eyebrow">Booking reference</p>
+                                <p class="reference">{{BookingId}}</p>
+                                <p class="caption">Full booking identifier</p>
+                            </div>
+                        </div>
+                        <div class="orbit" aria-hidden="true"><i class="one"></i><i class="two"></i><i class="dot"></i></div>
+                    </aside>
+                </div>
+            </div>
+        </section>
+
+        <footer>
+            <p class="note">{{CourseTitle}} &middot; keep this ticket for your records.</p>
+            <p class="note">Local WorkshopHub demo · synthetic data · no sign-in or payment.</p>
+        </footer>
+    </div>
+</div>
+</body>
+</html>

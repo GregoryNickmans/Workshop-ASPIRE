@@ -1,4 +1,5 @@
 using WorkshopHub.Web.Components;
+using WorkshopHub.Web.Endpoints;
 using WorkshopHub.Web.Services;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -10,11 +11,7 @@ builder.AddServiceDefaults();
 builder.WebHost.UseStaticWebAssets();
 builder.Services.AddRazorComponents().AddInteractiveServerComponents();
 builder.Services.AddSingleton<DisplayFormatting>();
-builder.Services.AddHttpClient<BookingApiClient>(client =>
-{
-    client.BaseAddress = new Uri("https+http://backendApi");
-    client.Timeout = TimeSpan.FromSeconds(30);
-});
+builder.Services.AddBookingApiClient();
 
 var app = builder.Build();
 app.UseExceptionHandler(error => error.Run(async context =>
@@ -25,6 +22,9 @@ app.UseExceptionHandler(error => error.Run(async context =>
 app.UseAntiforgery();
 app.MapStaticAssets();
 app.MapRazorComponents<App>().AddInteractiveServerRenderMode();
+
+// Same-origin PDF download; the API address never reaches the browser.
+app.MapTicketDownloads();
 
 app.MapDefaultEndpoints();
 app.Run();
