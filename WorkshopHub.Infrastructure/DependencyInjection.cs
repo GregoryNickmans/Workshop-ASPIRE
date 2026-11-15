@@ -1,5 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
+using WorkshopHub.Application.Observability;
 using WorkshopHub.Application.Abstractions;
 using WorkshopHub.Application.Services;
 using WorkshopHub.Infrastructure.Persistence;
@@ -14,6 +16,7 @@ public static class DependencyInjection
     // Request-side handlers. The PDF worker composes its own, so the API never registers a renderer.
     public static IServiceCollection AddWorkshopApplicationServices(this IServiceCollection services)
     {
+        services.TryAddSingleton<TicketTelemetry>();
         services.AddSingleton(TimeProvider.System);
         services.AddScoped<BookingService>();
         services.AddScoped<CourseService>();
@@ -32,6 +35,7 @@ public static class DependencyInjection
     // Completion-event handling. Only the API registers this, so the worker never acquires SQL.
     public static IServiceCollection AddWorkshopTicketPersistenceServices(this IServiceCollection services)
     {
+        services.TryAddSingleton<TicketTelemetry>();
         services.AddScoped<TicketPersistenceService>();
         return services;
     }

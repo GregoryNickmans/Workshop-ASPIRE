@@ -1,3 +1,5 @@
+using Microsoft.Extensions.DependencyInjection.Extensions;
+using WorkshopHub.Application.Observability;
 using WorkshopHub.Application.Services;
 using WorkshopHub.Infrastructure.Messaging;
 using WorkshopHub.Infrastructure.Tickets;
@@ -14,6 +16,7 @@ builder.AddWorkshopServiceBusClient();
 builder.AddWorkshopTicketStorage();
 builder.AddWorkshopTicketRenderer();
 
+builder.Services.TryAddSingleton<TicketTelemetry>();
 builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddScoped<TicketGenerationService>();
 builder.AddWorkshopTicketGeneration();

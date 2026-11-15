@@ -1,7 +1,9 @@
+using System.Diagnostics;
 using ErrorOr;
 using Microsoft.Extensions.Logging;
 using WorkshopHub.Application.Abstractions;
 using WorkshopHub.Application.Models;
+using WorkshopHub.Application.Observability;
 using WorkshopHub.Contracts.Messaging;
 using WorkshopHub.Domain.ValueObjects;
 
@@ -16,36 +18,69 @@ namespace WorkshopHub.Application.Services;
 public sealed class TicketRequestService(
     ITicketQueryExecutor queryExecutor,
     ITicketRequestPublisher publisher,
-    ILogger<TicketRequestService> logger)
+    ILogger<TicketRequestService> logger,
+    TicketTelemetry telemetry)
 {
     public async Task<ErrorOr<TicketRequest>> RequestAsync(BookingId bookingId, CancellationToken cancellationToken)
     {
-        // Eligibility comes first so a cancelled booking never receives its old ticket back.
-        var source = await queryExecutor.GetSourceAsync(bookingId, cancellationToken);
-        var eligibility = CheckEligibility(source);
-        if (eligibility.IsError) { return eligibility.Errors; }
-
-        // A persisted ticket is authoritative: answer from SQL without downloading the file.
-        var existing = await queryExecutor.FindForBookingAsync(bookingId, cancellationToken);
-        if (existing is not null)
-        {
-            return new TicketRequest(existing.Id, TicketRequestState.Ready, existing);
-        }
-
-        var message = Command(source!, TicketId.ForBooking(bookingId));
+        using var activity = TicketTelemetry.Source.StartActivity("tickets.request", ActivityKind.Internal);
+        var started = Stopwatch.GetTimestamp();
+        var outcome = "failed";
         try
         {
-            var published = await publisher.PublishAsync(message, cancellationToken);
-            if (published.IsError) { return published.Errors; }
-        }
-        catch (Exception error) when (error is not OperationCanceledException)
-        {
-            logger.LogWarning("Ticket command for booking {BookingId} could not be submitted ({Error}).",
-                bookingId.Value, error.GetType().Name);
-            return SubmissionFailed();
-        }
+            // Eligibility comes first so a cancelled booking never receives its old ticket back.
+            var source = await queryExecutor.GetSourceAsync(bookingId, cancellationToken);
+            var eligibility = CheckEligibility(source);
+            if (eligibility.IsError)
+            {
+                outcome = "rejected";
+                return eligibility.Errors;
+            }
 
-        return new TicketRequest(new TicketId(message.TicketId), TicketRequestState.Queued, null);
+            // A persisted ticket is authoritative: answer from SQL without downloading the file.
+            var existing = await queryExecutor.FindForBookingAsync(bookingId, cancellationToken);
+            if (existing is not null)
+            {
+                outcome = "ready";
+                return new TicketRequest(existing.Id, TicketRequestState.Ready, existing);
+            }
+
+            var message = Command(source!, TicketId.ForBooking(bookingId));
+            try
+            {
+                var published = await publisher.PublishAsync(message, cancellationToken);
+                if (published.IsError) { return published.Errors; }
+            }
+            catch (Exception error) when (error is not OperationCanceledException)
+            {
+                logger.LogWarning("Ticket command for booking {BookingId} could not be submitted ({Error}).",
+                    bookingId.Value, error.GetType().Name);
+                return SubmissionFailed();
+            }
+
+            outcome = "queued";
+            return new TicketRequest(new TicketId(message.TicketId), TicketRequestState.Queued, null);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            outcome = "cancelled";
+            throw;
+        }
+        catch (Exception)
+        {
+            activity?.SetTag("error.type", "unhandled_failure");
+            throw;
+        }
+        finally
+        {
+            if (outcome == "failed")
+            {
+                activity?.SetStatus(ActivityStatusCode.Error);
+                if (activity?.GetTagItem("error.type") is null) { activity?.SetTag("error.type", "submission_failed"); }
+            }
+            activity?.SetTag("ticket.outcome", outcome);
+            telemetry.Record("request", outcome, Stopwatch.GetElapsedTime(started));
+        }
     }
 
     // The issuance time is the persisted confirmation time, not "now": a retried submission produces the

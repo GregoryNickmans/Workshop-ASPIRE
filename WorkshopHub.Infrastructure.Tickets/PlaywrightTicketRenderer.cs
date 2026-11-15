@@ -1,4 +1,6 @@
+using System.Diagnostics;
 using ErrorOr;
+using WorkshopHub.Application.Observability;
 using Microsoft.Extensions.Logging;
 using Microsoft.Playwright;
 using WorkshopHub.Domain.Abstractions;
@@ -15,6 +17,50 @@ public sealed class PlaywrightTicketRenderer(ILogger<PlaywrightTicketRenderer> l
     private static readonly TimeSpan PlaywrightOutcomeBudget = TimeSpan.FromSeconds(50);
 
     public async Task<ErrorOr<byte[]>> RenderAsync(TicketDocument document, CancellationToken cancellationToken)
+    {
+        using var activity = TicketTelemetry.Source.StartActivity("tickets.render", ActivityKind.Internal);
+        var outcome = "failed";
+        try
+        {
+            var result = await RenderWithBudgetAsync(document, cancellationToken);
+            outcome = !result.IsError ? "completed" : result.Errors[0].Code switch
+            {
+                "Ticket.Cancelled" => "cancelled",
+                "Ticket.Timeout" => "timeout",
+                _ => "failed"
+            };
+            if (outcome is "timeout" or "failed")
+            {
+                activity?.SetStatus(ActivityStatusCode.Error);
+                activity?.SetTag("error.type", outcome == "timeout" ? "render_timeout" : "render_failed");
+            }
+            return result;
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            outcome = "cancelled";
+            throw;
+        }
+        catch (OperationCanceledException)
+        {
+            outcome = "timeout";
+            activity?.SetStatus(ActivityStatusCode.Error);
+            activity?.SetTag("error.type", "render_timeout");
+            throw;
+        }
+        catch (Exception)
+        {
+            activity?.SetStatus(ActivityStatusCode.Error);
+            activity?.SetTag("error.type", "render_failed");
+            throw;
+        }
+        finally
+        {
+            activity?.SetTag("ticket.outcome", outcome);
+        }
+    }
+
+    private async Task<ErrorOr<byte[]>> RenderWithBudgetAsync(TicketDocument document, CancellationToken cancellationToken)
     {
         using var budget = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         budget.CancelAfter(TotalBudget);

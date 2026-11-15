@@ -17,6 +17,9 @@ public static class DependencyInjection
     // responsibility stays with broker redelivery and the caller's explicit retry.
     public static IHostApplicationBuilder AddWorkshopServiceBusClient(this IHostApplicationBuilder builder)
     {
+        // Aspire subscribes to the SDK source, but Service Bus requires this switch to emit it.
+        // Enable before constructing clients so sends and processor callbacks carry W3C context.
+        AppContext.SetSwitch("Azure.Experimental.EnableActivitySource", true);
         builder.AddAzureServiceBusClient(ServiceBusTopology.ConnectionName, configureClientBuilder: client =>
             client.ConfigureOptions(options =>
             {

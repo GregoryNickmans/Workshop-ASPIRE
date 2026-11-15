@@ -1,4 +1,6 @@
+using System.Diagnostics;
 using ErrorOr;
+using WorkshopHub.Application.Observability;
 using Microsoft.Extensions.Logging;
 using WorkshopHub.Application.Abstractions;
 using WorkshopHub.Application.Models;
@@ -36,9 +38,52 @@ public sealed class TicketPersistenceService(
     ITicketBlobStore blobStore,
     ITicketStore ticketStore,
     ITicketQueryExecutor queryExecutor,
-    ILogger<TicketPersistenceService> logger)
+    ILogger<TicketPersistenceService> logger,
+    TicketTelemetry telemetry)
 {
     public async Task<TicketPersistenceResult> HandleAsync(EventMessage message, CancellationToken cancellationToken)
+    {
+        using var activity = TicketTelemetry.Source.StartActivity("tickets.persist", ActivityKind.Internal);
+        var started = Stopwatch.GetTimestamp();
+        var outcome = "failed";
+        try
+        {
+            var result = await HandleCoreAsync(message, cancellationToken);
+            outcome = result.Outcome switch
+            {
+                TicketPersistenceOutcome.Saved => "saved",
+                TicketPersistenceOutcome.Superseded => "superseded",
+                TicketPersistenceOutcome.Rejected => "rejected",
+                TicketPersistenceOutcome.Transient => "transient",
+                TicketPersistenceOutcome.Terminal => "terminal",
+                _ => "failed"
+            };
+            if (outcome is "transient" or "terminal" or "failed")
+            {
+                activity?.SetStatus(ActivityStatusCode.Error);
+                activity?.SetTag("error.type", outcome == "terminal" ? "unsupported_completion" : "persistence_failed");
+            }
+            return result;
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            outcome = "cancelled";
+            throw;
+        }
+        catch (Exception)
+        {
+            activity?.SetStatus(ActivityStatusCode.Error);
+            activity?.SetTag("error.type", "unhandled_failure");
+            throw;
+        }
+        finally
+        {
+            activity?.SetTag("ticket.outcome", outcome);
+            telemetry.Record("persist", outcome, Stopwatch.GetElapsedTime(started));
+        }
+    }
+
+    private async Task<TicketPersistenceResult> HandleCoreAsync(EventMessage message, CancellationToken cancellationToken)
     {
         if (!IsSupported(message))
         {

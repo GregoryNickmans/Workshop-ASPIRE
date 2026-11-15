@@ -1,4 +1,6 @@
+using System.Diagnostics;
 using ErrorOr;
+using WorkshopHub.Application.Observability;
 using Microsoft.Extensions.Logging;
 using WorkshopHub.Application.Abstractions;
 using WorkshopHub.Contracts.Messaging;
@@ -29,9 +31,51 @@ public sealed class TicketGenerationService(
     ITicketRenderer renderer,
     ITicketBlobStore blobStore,
     ITicketCompletionPublisher publisher,
-    ILogger<TicketGenerationService> logger)
+    ILogger<TicketGenerationService> logger,
+    TicketTelemetry telemetry)
 {
     public async Task<TicketGenerationResult> GenerateAsync(CommandMessage command, CancellationToken cancellationToken)
+    {
+        using var activity = TicketTelemetry.Source.StartActivity("tickets.generate", ActivityKind.Internal);
+        var started = Stopwatch.GetTimestamp();
+        var outcome = "failed";
+        try
+        {
+            var result = await GenerateCoreAsync(command, activity, cancellationToken);
+            outcome = result.Outcome switch
+            {
+                TicketGenerationOutcome.Completed => "completed",
+                TicketGenerationOutcome.Transient => "transient",
+                TicketGenerationOutcome.Terminal => "terminal",
+                _ => "failed"
+            };
+            if (outcome != "completed")
+            {
+                activity?.SetStatus(ActivityStatusCode.Error);
+                activity?.SetTag("error.type", outcome == "terminal" ? "unsupported_generation" : "generation_failed");
+            }
+            return result;
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            outcome = "cancelled";
+            throw;
+        }
+        catch (Exception)
+        {
+            activity?.SetStatus(ActivityStatusCode.Error);
+            activity?.SetTag("error.type", "unhandled_failure");
+            throw;
+        }
+        finally
+        {
+            activity?.SetTag("ticket.outcome", outcome);
+            telemetry.Record("generate", outcome, Stopwatch.GetElapsedTime(started));
+        }
+    }
+
+    private async Task<TicketGenerationResult> GenerateCoreAsync(CommandMessage command, Activity? activity,
+        CancellationToken cancellationToken)
     {
         var plan = Plan(command);
         if (plan.IsError) { return new(TicketGenerationOutcome.Terminal, plan.Errors); }
@@ -43,6 +87,7 @@ public sealed class TicketGenerationService(
         TicketBlobReference? reference;
         if (stored is not null)
         {
+            activity?.SetTag("ticket.generation.path", "reused");
             if (!stored.Matches(identity))
             {
                 // The key is occupied by a different generation. Overwriting or adopting it could corrupt
@@ -54,6 +99,7 @@ public sealed class TicketGenerationService(
         }
         else
         {
+            activity?.SetTag("ticket.generation.path", "rendered");
             reference = await RenderAndUploadAsync(command, identity, storageKey, cancellationToken);
         }
 
