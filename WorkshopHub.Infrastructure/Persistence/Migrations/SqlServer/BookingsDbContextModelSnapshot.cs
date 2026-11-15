@@ -146,52 +146,6 @@ namespace WorkshopHub.Infrastructure.Persistence.Migrations
 
                             t.HasCheckConstraint("CK_Courses_Seats", "[MaximumParticipants] > 0 AND [OccupiedSeats] >= 0 AND [OccupiedSeats] <= [MaximumParticipants]");
                         });
-
-                    b.HasData(
-                        new
-                        {
-                            Id = new Guid("b5274a15-4cac-4fd8-9c5c-ff5252a6cf01"),
-                            IsArchived = false,
-                            MaximumParticipants = 12,
-                            OccupiedSeats = 0,
-                            PriceCents = 7900,
-                            Revision = 0,
-                            ShortDescription = "Build a fresh perspective with hands-on exercises in ideation, collaboration and creative problem solving. Sample course.",
-                            Title = "Creative thinking, practical tools"
-                        },
-                        new
-                        {
-                            Id = new Guid("b5274a15-4cac-4fd8-9c5c-ff5252a6cf02"),
-                            IsArchived = false,
-                            MaximumParticipants = 8,
-                            OccupiedSeats = 0,
-                            PriceCents = 12500,
-                            Revision = 0,
-                            ShortDescription = "Explore the principles behind thoughtful digital experiences, from first sketch to an accessible prototype. Sample course.",
-                            Title = "Design for the everyday"
-                        },
-                        new
-                        {
-                            Id = new Guid("b5274a15-4cac-4fd8-9c5c-ff5252a6cf03"),
-                            IsArchived = false,
-                            MaximumParticipants = 10,
-                            OccupiedSeats = 0,
-                            PriceCents = 14900,
-                            Revision = 0,
-                            ShortDescription = "Turn an idea into a working web app. A friendly introduction to the building blocks of modern development. Sample course.",
-                            Title = "Your first web application"
-                        },
-                        new
-                        {
-                            Id = new Guid("b5274a15-4cac-4fd8-9c5c-ff5252a6cf04"),
-                            IsArchived = false,
-                            MaximumParticipants = 16,
-                            OccupiedSeats = 0,
-                            PriceCents = 6500,
-                            Revision = 0,
-                            ShortDescription = "Find your voice and shape a story that connects. Practice clear, confident communication in a supportive workshop. Sample course.",
-                            Title = "Present with confidence"
-                        });
                 });
 
             modelBuilder.Entity("WorkshopHub.Domain.Booking", b =>

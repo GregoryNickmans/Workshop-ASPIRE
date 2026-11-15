@@ -64,17 +64,6 @@ public partial class AddCourseBooking : Migration
                 table.CheckConstraint("CK_Courses_Seats", "[MaximumParticipants] > 0 AND [OccupiedSeats] >= 0 AND [OccupiedSeats] <= [MaximumParticipants]");
             });
 
-        migrationBuilder.InsertData(
-            table: "Courses",
-            columns: new[] { "Id", "MaximumParticipants", "PriceCents", "ShortDescription", "Title" },
-            values: new object[,]
-            {
-                { new Guid("b5274a15-4cac-4fd8-9c5c-ff5252a6cf01"), 12, 7900, "Build a fresh perspective with hands-on exercises in ideation, collaboration and creative problem solving. Sample course.", "Creative thinking, practical tools" },
-                { new Guid("b5274a15-4cac-4fd8-9c5c-ff5252a6cf02"), 8, 12500, "Explore the principles behind thoughtful digital experiences, from first sketch to an accessible prototype. Sample course.", "Design for the everyday" },
-                { new Guid("b5274a15-4cac-4fd8-9c5c-ff5252a6cf03"), 10, 14900, "Turn an idea into a working web app. A friendly introduction to the building blocks of modern development. Sample course.", "Your first web application" },
-                { new Guid("b5274a15-4cac-4fd8-9c5c-ff5252a6cf04"), 16, 6500, "Find your voice and shape a story that connects. Practice clear, confident communication in a supportive workshop. Sample course.", "Present with confidence" }
-            });
-
         migrationBuilder.CreateIndex(
             name: "IX_Bookings_CourseId_ParticipantEmail",
             table: "Bookings",
