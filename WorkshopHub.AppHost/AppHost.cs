@@ -65,8 +65,6 @@ if (builder.ExecutionContext.IsRunMode && builder.Environment.IsDevelopment())
         });
 }
 
-builder.Build().Run();
-
 // The worker is started alongside the API but the frontend never waits for it: approval returns
 // immediately, and a queued ticket simply appears once generation finishes.
 builder.AddProject<Projects.WorkshopHub_ServiceBusProcessor>("serviceBusProcessor")
@@ -77,6 +75,8 @@ builder.AddProject<Projects.WorkshopHub_ServiceBusProcessor>("serviceBusProcesso
     .WithEnvironment("ASPNETCORE_ENVIRONMENT", "Development")
     .WithHttpEndpoint(name: "http")
     .WithHttpHealthCheck("/health");
+
+builder.Build().Run();
 
 // A subscription with no rule only matches what the default catch-all forwards, so each one declares
 // exactly one correlation rule on its own subject. Declaring a rule replaces the default rule, which
