@@ -82,18 +82,28 @@ public sealed class BookingCommandStore(DatabaseContext database, TimeProvider t
 
     private async Task<ErrorOr<T>> ExecuteAsync<T>(Func<CancellationToken, Task<ErrorOr<T>>> command, CancellationToken cancellationToken)
     {
-        database.ChangeTracker.Clear();
         try
         {
-            await using var transaction = await database.Database.BeginTransactionAsync(IsolationLevel.Serializable, cancellationToken);
-            var result = await command(cancellationToken);
-            if (result.IsError)
+            return await database.Database.CreateExecutionStrategy().ExecuteAsync<ErrorOr<T>>(async token =>
             {
-                await transaction.RollbackAsync(cancellationToken);
-                return result.Errors;
-            }
-            await transaction.CommitAsync(cancellationToken);
-            return result;
+                database.ChangeTracker.Clear();
+                try
+                {
+                    await using var transaction = await database.Database.BeginTransactionAsync(IsolationLevel.Serializable, token);
+                    var result = await command(token);
+                    if (result.IsError)
+                    {
+                        await transaction.RollbackAsync(token);
+                        return result.Errors;
+                    }
+                    await transaction.CommitAsync(token);
+                    return result;
+                }
+                finally
+                {
+                    database.ChangeTracker.Clear();
+                }
+            }, cancellationToken);
         }
         catch (DbUpdateException error) when (error.InnerException is SqlException { Number: 2601 or 2627 })
         {

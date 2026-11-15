@@ -20,25 +20,27 @@ public sealed class BookingRepository(DatabaseContext database) : IBookingReposi
     }
     public async Task SaveAsync(CancellationToken cancellationToken) => await database.SaveChangesAsync(cancellationToken);
     public async Task<IReadOnlyList<Booking>> ListActiveAsync(CancellationToken cancellationToken) => await database.Bookings.ToListAsync(cancellationToken);
-    public async Task<ErrorOr<SeedResult>> ExecuteDatasetChangeAsync(Func<CancellationToken, Task<ErrorOr<SeedResult>>> change, CancellationToken cancellationToken)
-    {
-        await using var transaction = await database.Database.BeginTransactionAsync(IsolationLevel.Serializable, cancellationToken);
-        try
+    public Task<ErrorOr<SeedResult>> ExecuteDatasetChangeAsync(Func<CancellationToken, Task<ErrorOr<SeedResult>>> change, CancellationToken cancellationToken) =>
+        database.Database.CreateExecutionStrategy().ExecuteAsync<ErrorOr<SeedResult>>(async token =>
         {
-            var result = await change(cancellationToken);
-            if (result.IsError)
+            // The callback may be retried; query and build mutable state inside each invocation.
+            try
             {
-                await transaction.RollbackAsync(cancellationToken);
-                database.ChangeTracker.Clear();
-                return result.Errors;
+                await using var transaction = await database.Database.BeginTransactionAsync(IsolationLevel.Serializable, token);
+                var result = await change(token);
+                if (result.IsError)
+                {
+                    await transaction.RollbackAsync(token);
+                    database.ChangeTracker.Clear();
+                    return result.Errors;
+                }
+                await transaction.CommitAsync(token);
+                return result;
             }
-            await transaction.CommitAsync(cancellationToken);
-            return result;
-        }
-        catch
-        {
-            database.ChangeTracker.Clear();
-            throw;
-        }
-    }
+            catch
+            {
+                database.ChangeTracker.Clear();
+                throw;
+            }
+        }, cancellationToken);
 }
