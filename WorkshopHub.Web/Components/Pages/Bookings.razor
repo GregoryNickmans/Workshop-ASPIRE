@@ -5,6 +5,7 @@
 @inject DisplayFormatting Display
 
 <PageTitle>Explore courses · WorkshopHub</PageTitle>
+<BookingLiveUpdates OnChanged="LiveReloadAsync" />
 <section class="catalog-hero">
     <div>
         <p class="eyebrow">Make room for something new</p>
@@ -122,6 +123,26 @@
     private IEnumerable<CourseResponse> FilteredCourses => _courses.Where(x => (!_availableOnly || x.RemainingSeats > 0) &&
         (string.IsNullOrWhiteSpace(_search) || x.Title.Contains(_search, StringComparison.OrdinalIgnoreCase) ||
 x.ShortDescription.Contains(_search, StringComparison.OrdinalIgnoreCase)));
+    private bool _livePending;
+    private bool _liveReloading;
+    private async Task LiveReloadAsync(Guid? bookingId)
+    {
+        _livePending = true;
+        if (_liveReloading) { return; }
+        _liveReloading = true;
+        try
+        {
+            while (_livePending && !_lifetime.IsCancellationRequested)
+            {
+                await Task.Delay(150, _lifetime.Token);
+                if (_loading) { continue; }
+                _livePending = false;
+                await ReloadAsync();
+            }
+        }
+        catch (OperationCanceledException) when (_lifetime.IsCancellationRequested) { }
+        finally { _liveReloading = false; }
+    }
     protected override Task OnInitializedAsync() => ReloadAsync();
     private void ClearFilters() { _search = ""; _availableOnly = false; }
     private async Task ReloadAsync()

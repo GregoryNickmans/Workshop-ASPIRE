@@ -39,7 +39,8 @@ public sealed class TicketPersistenceService(
     ITicketStore ticketStore,
     ITicketQueryExecutor queryExecutor,
     ILogger<TicketPersistenceService> logger,
-    TicketTelemetry telemetry)
+    TicketTelemetry telemetry,
+    IBookingNotifications notifications)
 {
     public async Task<TicketPersistenceResult> HandleAsync(EventMessage message, CancellationToken cancellationToken)
     {
@@ -49,6 +50,18 @@ public sealed class TicketPersistenceService(
         try
         {
             var result = await HandleCoreAsync(message, cancellationToken);
+            // The transaction is already committed. A duplicate hint is safe; notification failure
+            // must never abandon an otherwise saved event or undo its metadata.
+            if (result.Outcome == TicketPersistenceOutcome.Saved && result.Ticket is { } ticket)
+            {
+                using var budget = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+                budget.CancelAfter(TimeSpan.FromSeconds(5));
+                try { await notifications.PublishAsync(ticket.BookingId.Value, budget.Token); }
+                catch (Exception error)
+                {
+                    logger.LogWarning("Ticket persisted but notification failed ({Error}); clients can refresh.", error.GetType().Name);
+                }
+            }
             outcome = result.Outcome switch
             {
                 TicketPersistenceOutcome.Saved => "saved",

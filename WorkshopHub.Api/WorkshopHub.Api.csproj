@@ -6,6 +6,7 @@
     <ProjectReference Include="../WorkshopHub.Infrastructure.Messaging/WorkshopHub.Infrastructure.Messaging.csproj" />
     <ProjectReference Include="../WorkshopHub.Contracts/WorkshopHub.Contracts.csproj" />
     <ProjectReference Include="..\WorkshopHub.AppHost.ServiceDefaults\WorkshopHub.AppHost.ServiceDefaults.csproj" />
+    <PackageReference Include="Microsoft.Azure.SignalR.Management" />
     <PackageReference Include="Microsoft.AspNetCore.OpenApi" />
     <PackageReference Include="Swashbuckle.AspNetCore.SwaggerUI" />
     <PackageReference Include="Microsoft.OpenApi" />

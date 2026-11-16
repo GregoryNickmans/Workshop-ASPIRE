@@ -27,6 +27,10 @@ var topic = serviceBus.AddServiceBusTopic(ServiceBusTopology.Topic);
 GeneratorSubscription(topic);
 PersistenceSubscription(topic);
 
+// Only the API owns the management connection; browsers negotiate through the frontend.
+var notifications = builder.AddAzureSignalR("notifications", AzureSignalRServiceMode.Serverless)
+    .RunAsEmulator();
+
 var migrations = builder.AddProject<Projects.WorkshopHub_Migrator>("migrations")
     .WithReference(database)
     .WaitFor(database);
@@ -39,6 +43,8 @@ var backendApi = builder.AddProject<Projects.WorkshopHub_Api>("backendApi")
     .WaitFor(storage)
     .WithReference(serviceBus)
     .WaitFor(serviceBus)
+    .WithReference(notifications)
+    .WaitFor(notifications)
     .WithHttpHealthCheck("/health");
 
 builder.AddProject<Projects.WorkshopHub_Web>("frontend")

@@ -25,6 +25,7 @@ app.MapRazorComponents<App>().AddInteractiveServerRenderMode();
 
 // Same-origin PDF download; the API address never reaches the browser.
 app.MapTicketDownloads();
+app.MapBookingNotifications();
 
 app.MapDefaultEndpoints();
 app.Run();

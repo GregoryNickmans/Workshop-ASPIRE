@@ -12,6 +12,9 @@ namespace WorkshopHub.Web.Services;
 // Every operation crosses HTTP. Mutations are never automatically retried.
 public sealed class BookingApiClient(HttpClient httpClient)
 {
+    public Task<NotificationConnection> NegotiateNotificationsAsync(CancellationToken cancellationToken) =>
+        SendAsync<NotificationConnection>(HttpMethod.Post, "/api/v1/notifications/negotiate", null, cancellationToken);
+
     public Task<List<CourseResponse>> ListCoursesAsync(CancellationToken cancellationToken) =>
         GetAsync<List<CourseResponse>>("/api/v1/courses", cancellationToken);
     public Task<CourseResponse> GetCourseAsync(Guid id, CancellationToken cancellationToken) =>

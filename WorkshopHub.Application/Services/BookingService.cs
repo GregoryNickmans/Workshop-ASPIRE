@@ -10,6 +10,7 @@ public sealed class BookingService(
     IQueryExecutor queryExecutor,
     IBookingCommandStore bookingCommandStore,
     TicketRequestService ticketRequestService,
+    IBookingNotifications notifications,
     ILogger<BookingService> logger)
 {
     // A committed confirmation is never rolled back by a ticket problem; the warning carries the reason.
@@ -23,8 +24,12 @@ public sealed class BookingService(
         return view is null ? NotFound() : view;
     }
 
-    public Task<ErrorOr<BookingView>> CreateAsync(CourseId courseId, string? name, string? email, CancellationToken cancellationToken) =>
-        bookingCommandStore.CreateBookingAsync(courseId, name, email, cancellationToken);
+    public async Task<ErrorOr<BookingView>> CreateAsync(CourseId courseId, string? name, string? email, CancellationToken cancellationToken)
+    {
+        var created = await bookingCommandStore.CreateBookingAsync(courseId, name, email, cancellationToken);
+        if (!created.IsError) { await NotifyAsync(created.Value.Id, cancellationToken); }
+        return created;
+    }
 
     public async Task<ErrorOr<BookingConfirmation>> ConfirmAsync(BookingId bookingId, CancellationToken cancellationToken)
     {
@@ -32,12 +37,29 @@ public sealed class BookingService(
         var confirmed = await bookingCommandStore.TransitionAsync(bookingId, false, cancellationToken);
         if (confirmed.IsError) { return confirmed.Errors; }
 
+        await NotifyAsync(confirmed.Value.Id, cancellationToken);
         // Only broker submission runs after the commit, so approval never waits for a PDF.
         return await RequestAfterConfirmationAsync(confirmed.Value, cancellationToken);
     }
 
-    public Task<ErrorOr<BookingView>> CancelAsync(BookingId bookingId, CancellationToken cancellationToken) =>
-        bookingCommandStore.TransitionAsync(bookingId, true, cancellationToken);
+    public async Task<ErrorOr<BookingView>> CancelAsync(BookingId bookingId, CancellationToken cancellationToken)
+    {
+        var cancelled = await bookingCommandStore.TransitionAsync(bookingId, true, cancellationToken);
+        if (!cancelled.IsError) { await NotifyAsync(cancelled.Value.Id, cancellationToken); }
+        return cancelled;
+    }
+
+    private async Task NotifyAsync(BookingId bookingId, CancellationToken cancellationToken)
+    {
+        using var budget = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        budget.CancelAfter(TimeSpan.FromSeconds(5));
+        try { await notifications.PublishAsync(bookingId.Value, budget.Token); }
+        catch (Exception error)
+        {
+            // Best effort after commit. Never turn a committed mutation into an apparent failure.
+            logger.LogWarning("Booking committed but notification failed ({Error}); clients can refresh.", error.GetType().Name);
+        }
+    }
 
     private async Task<BookingConfirmation> RequestAfterConfirmationAsync(BookingView booking, CancellationToken cancellationToken)
     {

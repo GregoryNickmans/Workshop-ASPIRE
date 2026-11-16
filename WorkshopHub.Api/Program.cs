@@ -4,6 +4,8 @@ using WorkshopHub.Infrastructure;
 using WorkshopHub.Infrastructure.Messaging;
 using WorkshopHub.Infrastructure.Persistence;
 using WorkshopHub.Infrastructure.Tickets;
+using WorkshopHub.Api.Notifications;
+using WorkshopHub.Application.Abstractions;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -31,6 +33,8 @@ builder.AddWorkshopServiceBusClient();
 builder.AddWorkshopTicketPublisher();
 builder.Services.AddWorkshopTicketPersistenceServices();
 builder.AddWorkshopTicketPersistence();
+builder.Services.AddSingleton<BookingNotificationPublisher>();
+builder.Services.AddSingleton<IBookingNotifications>(services => services.GetRequiredService<BookingNotificationPublisher>());
 
 var app = builder.Build();
 app.UseExceptionHandler();
